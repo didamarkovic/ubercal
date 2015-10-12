@@ -1,0 +1,17 @@
+Tests the possiblity of performing uber-cal to achieve the required relative spectro-photometric calibration
+
+make create-euclid-patch
+./create-euclid-patch
+
+make create-euclid-survey
+./create-euclid-survey
+
+make test-calibration
+./test-calibration
+
+
+Current assumptions:
+
+Assumes Euclidean geometry over survey
+Assumes Calibrator densities and SNR do not vary over survey
+Uses binned stellar densities
