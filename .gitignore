@@ -1,0 +1,15 @@
+*~
+*.o
+*.job
+*.pyc
+bin/*
+plots/*
+data/*
+outputs/*
+paper/*
+*.txt
+*.pol
+*.vrt
+*.dSYM
+*.a
+test-calibration/mangle2.2/bin/*
