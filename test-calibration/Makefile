@@ -1,6 +1,6 @@
 # Makefile for calculating power spectrum from mock data
 CC	= gcc
-CFLAGS	= -Wall -O3 -I$(PGPLOT_DIR)
+CFLAGS	= -Wall -O3
 
 D_UTIL	= ./
 
