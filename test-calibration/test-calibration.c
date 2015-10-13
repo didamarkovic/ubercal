@@ -65,8 +65,8 @@ int main() {
   fscanf(fin_survey,"# %ld dithers\n",&NDITH);
   if(NDITH>EMAX) err_known("NDITH > EMAX");
   
-  fscanf(fin_survey,"# NX=%ld, NY=%ld\n",&NX,&NY);
-  nexposure = NDITH*NX*NY;
+  fscanf(fin_survey,"# NRA=%ld, NDEC=%ld\n",&NX,&NY);
+  nexposure = 16.0*NDITH*NX*NY;
   fscanf(fin_survey,"# %ld overlap polygons\n",&noverlap);
 
    // memory for overlap polygons input
@@ -101,7 +101,7 @@ int main() {
     // loop over magnitude bins, and Poisson sampling each (to contain nstar stars),
     // gives a variance of the final variance of the calibration measurement
     // of 1/(sum_bins nstar/var)
-    double sigma = 1.0e10, nstar_tot=0.0;
+    double sigma = 0.0, nstar_tot=0.0;
     for(int istar=0;istar<NBIN_STAR;istar++) {
       double nstar = poidev(p_overlap[i].area*dens_v[istar],&seed);
       sigma += nstar/(rms_v[istar]*rms_v[istar]);

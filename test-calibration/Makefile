@@ -18,11 +18,8 @@ all:
 create-euclid-patch: create-euclid-patch.o 
 	$(CC)  $(CFLAGS) -o $@ create-euclid-patch.o -lm
 
-create-euclid-survey: create-euclid-survey.o 
-	$(CC)  $(CFLAGS) -o $@ create-euclid-survey.o -lm
-
 test-calibration: test-calibration.o $(O_UTIL) 
 	$(CC)  $(CFLAGS) -o $@ test-calibration.o -lm $(O_UTIL) 
 
 clean:
-	-rm -f *.o create-euclid-patch create-euclid-survey test-calibration
+	-rm -f *.o create-euclid-patch test-calibration
