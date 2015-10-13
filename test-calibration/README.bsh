@@ -3,9 +3,6 @@
 make create-euclid-patch
 ./create-euclid-patch
 
-make create-euclid-survey
-./create-euclid-survey
-
 make test-calibration
 ./test-calibration
 

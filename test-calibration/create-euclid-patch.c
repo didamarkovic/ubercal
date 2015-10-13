@@ -12,13 +12,15 @@ const double xstart=180.*3600.;  // initial point for x in arcsec
 
 const double XBIT=0.1; // offet allowed when polygon matching in arcsec - corresponds to 1/3 of a pixel;
 
-const double mpi = 3.1415926536;
+const int NRA = 2;   // number of exposures in x - direction
+const int NDEC = 2;   // number of exposures in y - direction
+const int NDITH = 4;
 
 struct poly {
   double area;
-  double weight;
-  double xlow, ylow, xhigh, yhigh;
-  int iexposure;
+  double corners[4][2];
+  int nexposure;
+  int iexposure[NDITH]; // integers of exposures included in this overlap - max of one from each dither
 };
 
 // std error handler
@@ -29,8 +31,16 @@ void err_known(const char *error_text)
   exit(1);
 }
 
+int find_rot(double[2][3],double[2][3],double[3][3]);
+
 // the six numbers that give the dither strategy
-const double dither[6]={50.0,100.0,0.0,100.0,0.0,100.0};
+// const double dither[6]={0.0,0.0,0.0,0.0,0.0,0.0};
+const double dither[6]={50.0,100.0,0.0,100.0,0.0,100.0}; // J-pattern
+// const double dither[6]={50.0,100.0,50.0,0.0,50.0,0.0}; // step-pattern
+// const double dither[6]={50.0,100.0,0.0,100.0,50.0,100.0}; // S-pattern
+// const double dither[6]={50.0, 100.0, 50.0, 0.0, 50.0, 100.0}; // N-pattern
+// const double dither[6]={0.0, 0.0, 318.0, 331.0, 0.0, 0.0}; // X-pattern
+// const double dither[6]={50.0,0.0,0.0,100.0,-50.0,0.0}; // box-pattern
 // const double dither[6]={275.0,0.0,0.0,350.0,-275.0,0.0};
 // const double dither[6]={1599.0,0.0,0.0,1774.0,-1599.0,0.0};
 
@@ -40,7 +50,7 @@ int main() {
 
   // ********************************************************************************
   // memory for polygons - this is overkill for final ones, as we don't store vertices
-  long NPOLY_MAX = 10000;
+  long NPOLY_MAX = 10000000;
   struct poly *p_init;
   if(!(p_init = (struct poly*)malloc(NPOLY_MAX*sizeof(struct poly)))) 
     err_known("memory allocation problem for polygons");
@@ -48,15 +58,18 @@ int main() {
   struct poly *p_final;
   if(!(p_final = (struct poly*)malloc(NPOLY_MAX*sizeof(struct poly)))) 
     err_known("memory allocation problem for polygons");
-
+  for(int i=0;i<NPOLY_MAX;i++) {
+    p_final[i].nexposure=0;
+    for(int j=0;j<NDITH;j++) p_final[i].iexposure[j]=0;
+  }
+  
   // ********************************************************************************
   // need to work out relative positions of all CCDs in relevent exposures
   // this is where we put in the dither information - number, offsets
-  const int Ndither = 4;
 
   // set up dither offsets
-  double xdith[Ndither], ydith[Ndither];
-  for(int idither=0;idither<Ndither;idither++) {
+  double xdith[NDITH], ydith[NDITH];
+  for(int idither=0;idither<NDITH;idither++) {
     if(idither==0) { xdith[idither]=0.0; ydith[idither]=0.0; }
     if(idither==1) { xdith[idither]=xdith[idither-1]+dither[0]; ydith[idither]=ydith[idither-1]+dither[1]; }
     if(idither==2) { xdith[idither]=xdith[idither-1]+dither[2]; ydith[idither]=ydith[idither-1]+dither[3]; }
@@ -67,32 +80,45 @@ int main() {
   double xp_shift = 4.0*(npix + xgap_size/pix_size)*pix_scale;
   double yp_shift = 4.0*(npix + ygap_size/pix_size)*pix_scale;
 
-  int ipoly=0;    
-  for(int idither=0;idither<Ndither;idither++) {
+  int ipoly=0, iexpos=0, idetect=0;    
+  for(int idither=0;idither<NDITH;idither++) {
        
-    // loop through neigbouring exposures
-    // each pointing has 9 of these, 3 in ipoint and 3 in jpoint
-    for(int jpoint=-1;jpoint<=1;jpoint++) {
+    for(int jpoint=0;jpoint<NDEC;jpoint++) {
       
       double ypoint = (double)jpoint * yp_shift;
       
-      for(int ipoint=-1;ipoint<=1;ipoint++) {
-	
-	double xpoint = (double)ipoint * xp_shift;
+      for(int ipoint=0;ipoint<NRA;ipoint++) {
+  
+  double xpoint = (double)ipoint * xp_shift;
+  
+  // loop over CCDs in each exposure - polynomial for each
+  for(int i=0;i<4;i++)      
+    for(int j=0;j<4;j++) {
 
-	// loop over CCDs in each exposure - polynomial for each
-	for(int i=0;i<4;i++)	    
-	  for(int j=0;j<4;j++) {
-	    p_init[ipoly].xlow      = xstart + xpoint + xdith[idither] + (double)i*(npix + xgap_size/pix_size)*pix_scale;
-	    p_init[ipoly].xhigh     = p_init[ipoly].xlow + npix*pix_scale;	    
-	    p_init[ipoly].ylow      = ypoint + ydith[idither] + (double)j*(npix + ygap_size/pix_size)*pix_scale;
-	    p_init[ipoly].yhigh     = p_init[ipoly].ylow + npix*pix_scale;	      
-	    p_init[ipoly].area      = 0.0;
-	    p_init[ipoly].iexposure = idither*9 + (jpoint+1)*3 + (ipoint+1);
-	    p_init[ipoly].weight    = (float)p_init[ipoly].iexposure;
-	    if(++ipoly>NPOLY_MAX) err_known("too many initial polynomials for memory");
-	  }
-	
+      // coords of polygon in ra, (dec+pi/2) / arcsec
+      double poly_ralow = xstart + xpoint + xdith[idither] + (double)i*(npix + xgap_size/pix_size)*pix_scale;
+      double poly_rahig = poly_ralow + npix*pix_scale;
+      double poly_delow = ypoint + ydith[idither] + (double)j*(npix + ygap_size/pix_size)*pix_scale;
+      double poly_dehig = poly_delow + npix*pix_scale;
+
+      p_init[ipoly].corners[0][1] = poly_dehig;
+      p_init[ipoly].corners[0][0] = poly_ralow;
+      p_init[ipoly].corners[1][1] = poly_delow;
+      p_init[ipoly].corners[1][0] = poly_ralow;
+      p_init[ipoly].corners[2][1] = poly_delow;
+      p_init[ipoly].corners[2][0] = poly_rahig;
+      p_init[ipoly].corners[3][1] = poly_dehig;
+      p_init[ipoly].corners[3][0] = poly_rahig;
+      p_init[ipoly].area          = 0.0;
+      p_init[ipoly].nexposure     = 1;
+      p_init[ipoly].iexposure[0]  = idetect;      
+      // p_init[ipoly].iexposure[0]  = iexpos;      
+      if(++ipoly>NPOLY_MAX) err_known("too many initial polynomials for memory");
+
+      idetect++;
+    }
+
+  iexpos++;
       }
     }
   }
@@ -110,47 +136,41 @@ int main() {
   fprintf(fout_mask,"unit s\n"); // arcsec
 
   for(int ipoly=0;ipoly<npoly_init;ipoly++) {
-    fprintf(fout_mask,"vertices 0 ( 4 vertices, %ld weight, %lf %lf mid):\n",
-	    (long)p_init[ipoly].weight,
-	    0.5*(p_init[ipoly].xlow+p_init[ipoly].xhigh),
-	    0.5*(p_init[ipoly].ylow+p_init[ipoly].yhigh)); // arcsec
+    fprintf(fout_mask,"vertices 0 ( 4 vertices, 1 weight, %lf %lf mid):\n",
+      0.5*(p_init[ipoly].corners[1][0]+p_init[ipoly].corners[3][0]),
+      0.5*(p_init[ipoly].corners[1][1]+p_init[ipoly].corners[3][1])); // arcsec
     fprintf(fout_mask,"  %lf %lf\t%lf %lf\t%lf %lf\t%lf %lf\n",
-	    p_init[ipoly].xlow,p_init[ipoly].yhigh,
-	    p_init[ipoly].xlow,p_init[ipoly].ylow,
-	    p_init[ipoly].xhigh,p_init[ipoly].ylow,
-	    p_init[ipoly].xhigh,p_init[ipoly].yhigh);
+      p_init[ipoly].corners[0][0],p_init[ipoly].corners[0][1],
+      p_init[ipoly].corners[1][0],p_init[ipoly].corners[1][1],
+      p_init[ipoly].corners[2][0],p_init[ipoly].corners[2][1],
+      p_init[ipoly].corners[3][0],p_init[ipoly].corners[3][1]);
   }
   fclose(fout_mask);
-  
-  // ********************************************************************************
-
-  // now run mangle to Balkanise mask
-  system("./mangle2.2/bin/poly2poly full-pointing.vrt full-pointing.pol");
-  system("./mangle2.2/bin/pixelize full-pointing.pol full-pointing.pol");
-  system("./mangle2.2/bin/snap full-pointing.pol full-pointing.pol");
-  system("./mangle2.2/bin/balkanize -Ba full-pointing.pol full-pointing.pol");
-  
-  // Convert output back to vertex file
-  system("./mangle2.2/bin/poly2poly -ovs full-pointing.pol full-pointing.vrt");
 
   // exit(0);
   
   // ********************************************************************************
+
+  // now run mangle to Balkanise mask
+  // doesn't work without the pixelization step - ???
+  system("./mangle2.2/bin/pixelize full-pointing.vrt full-pointing.pol");
+  system("./mangle2.2/bin/snap full-pointing.pol full-pointing.pol");
+  system("./mangle2.2/bin/balkanize -Ba -ovs full-pointing.pol full-pointing.vrt");
+  
+  // ********************************************************************************
   // now read in, and sum over multiple regions
   FILE *fp;
+  
   if((fp=fopen(fname,"r"))==NULL)
     err_known("cannot open input file");
 
   // read in total number of polygons
   long npoly_final=0;
+  double tot_area=0.0;
   fscanf(fp,"%ld polygons\n",&npoly_final);
   printf("%ld polygons in balkanised file\n",npoly_final);
   if(npoly_final>NPOLY_MAX) err_known("too many polygons in file");
   fgets(buf,bsz,fp);
-
-  // this is the vestor we use to match final "small" polygons to the exposures, of which we consider Ndither*9 
-  int poly_match[npoly_final][Ndither*9];
-  for(int i=0;i<npoly_final;i++) for(int j=0;j<Ndither*9;j++) poly_match[i][j]=0;
 
   for(int ipoly=0;ipoly<npoly_final;ipoly++) {
 
@@ -173,13 +193,15 @@ int main() {
     // and flag polygons in Balkanised mask that are fully inside one of the initial polygons
     for(int j=0;j<npoly_init;j++) {
       int parent=1;
-      for(int iv=0;iv<nvert;iv++) 
-	if(p_init[j].xhigh < (x[iv]-XBIT) ||
-	   p_init[j].xlow  > (x[iv]+XBIT) ||
-	   p_init[j].yhigh < (y[iv]-XBIT) || 
-	   p_init[j].ylow  > (y[iv]+XBIT) ) parent=0;
-      
-      if(parent) poly_match[ipoly][p_init[j].iexposure]=1;
+      for(int iv=0;iv<nvert;iv++)
+  if((p_init[j].corners[3][0] < (x[iv]-XBIT)) ||
+     (p_init[j].corners[1][0] > (x[iv]+XBIT)) ||
+     (p_init[j].corners[3][1] < (y[iv]-XBIT)) || 
+     (p_init[j].corners[1][1] > (y[iv]+XBIT)) ) parent=0;
+      if(parent) {
+  p_final[ipoly].iexposure[p_final[ipoly].nexposure]=p_init[j].iexposure[0];  
+  if( (p_final[ipoly].nexposure++) > NDITH) err_known("poly match");
+      }
     }
     
     // calculate area in deg^2
@@ -191,10 +213,28 @@ int main() {
     }
     p_final[ipoly].area *= 0.5/(3600.*3600.);
 
+    tot_area += p_final[ipoly].area;
+    
+    // output polygons in mask
+    //fprintf(fout_mask,"vertices 0 ( %d vertices, %d weight, 1 1 mid):\n",nvert,p_final[ipoly].nexposure);
+    //for(int iv=0;iv<nvert;iv++) fprintf(fout_mask,"%g %g ",x[iv],y[iv]);
+    //fprintf(fout_mask,"\n");
+    
   }
   fclose(fp);
+  //fclose(fout_mask);
 
+
+  printf("tot area = %g\n",tot_area);
   // exit(0);
+
+  /*
+  for(int i=0;i<npoly_final;i++) {
+    printf("%d %d :",i,p_final[i].nexposure);
+    for(int ie=0;ie<p_final[i].nexposure;ie++) printf("%d ",p_final[i].iexposure[ie]);
+    printf("\n");
+  }
+  */
   
   // ********************************************************************************
   // sort final polygons to reduce the number to unique sets of overlaps
@@ -202,71 +242,84 @@ int main() {
   for(int i=npoly_final;i>=0;i--)
     for(int j=0;j<i;j++) {
       int match=1;
-      for(int k=0;k<Ndither*9;k++) if(poly_match[i][k]!=poly_match[j][k]) match=0;
+      for(int k=0;k<NDITH;k++) if(p_final[i].iexposure[k]!=p_final[j].iexposure[k]) { match=0; break; }
       if(match) {
-	p_final[j].area+=p_final[i].area;
-	p_final[i].area=0.0;
-	break;
+  p_final[j].area+=p_final[i].area;
+  p_final[i].area=0.0;
+  break;
       }
     }
 
+  // find number of overlaps
+  int noverlap=0;
+  for(int i=0;i<npoly_final;i++) if(p_final[i].area>0.0) noverlap++;
+  printf("%d distinct overlap regions\n",noverlap);
+
   // ********************************************************************************
-  // final output of reduced set of overlap areas
-  long noverlap=0, noverlap_central=0;
-  for(int i=0;i<npoly_final;i++) if(p_final[i].area>0.0) {
-      noverlap++;
-      if(poly_match[i][4]==1 || poly_match[i][13]==1 || poly_match[i][22]==1 || poly_match[i][31]==1)
-	noverlap_central++;
-    }
-  printf("%ld overlap regions, %ld using central exposures\n",
-	 noverlap,noverlap_central);
-
-  // check total areas agree with expectation
-  for(int i=0;i<Ndither;i++) {
-    int cen_exposure = 4 + 9*i;
-    double tot_area=0.0;
-    for(int i=0;i<npoly_final;i++) if(poly_match[i][cen_exposure]==1) tot_area += p_final[i].area;
-    printf("exposure %d, total area %g deg^2\n",cen_exposure,tot_area);
-  }
-
-
-  FILE *fout_overlaps;
-  sprintf(fname,"full-pointing-overlaps.txt");
-  if((fout_overlaps=fopen(fname,"w"))==NULL)
+  // print out final list of overlaps for "full survey"
+  FILE *fout_survey;
+  sprintf(fname,"full-survey-overlaps.txt");
+  if((fout_survey=fopen(fname,"w"))==NULL)
     err_known("cannot open output file");
-  fprintf(fout_overlaps,"# %d dithers\n",Ndither);
-  fprintf(fout_overlaps,"# %ld overlap polygons\n",noverlap_central);
 
-  //find total_area of central region
-  double tot_area = xp_shift * yp_shift / (3600.*3600.);
-  double stack_area[5];
-  for(int i=1;i<5;i++) stack_area[i]=0.0;
+  fprintf(fout_survey,"# %d dithers\n",NDITH);
+  fprintf(fout_survey,"# NRA=%d, NDEC=%d\n",NRA,NDEC);
+  fprintf(fout_survey,"# %d overlap polygons\n",noverlap);
+  for(int i=0;i<npoly_final;i++) if(p_final[i].area>0.0) {
+    fprintf(fout_survey,"%d %g %d :",i,p_final[i].area,p_final[i].nexposure);
+    printf("%d %g %d :",i,p_final[i].area,p_final[i].nexposure);
+    for(int ie=0;ie<p_final[i].nexposure;ie++) {
+      fprintf(fout_survey,"%d ",p_final[i].iexposure[ie]);
+      printf("%d ",p_final[i].iexposure[ie]);
+    }
+    printf("\n");
+    fprintf(fout_survey,"\n");
+  }
+  fclose(fout_survey);
 
-  for(int l=0,i=0;i<npoly_final;i++)
-    if(p_final[i].area>0.0)
-      if(poly_match[i][4]==1 || poly_match[i][13]==1 || poly_match[i][22]==1 || poly_match[i][31]==1)
-	{
-	  int count=0;
-	  for(int j=0;j<Ndither*9;j++) if(poly_match[i][j]) count++;
-	  fprintf(fout_overlaps,"%d %g %d :",l++,p_final[i].area,count);
-	  for(int j=0;j<Ndither*9;j++) if(poly_match[i][j]) fprintf(fout_overlaps,"%d ",j);
-	  fprintf(fout_overlaps,"\n");
-
-	  for(int j=0;j<Ndither*9;j++) printf("%d ",poly_match[i][j]);
-	  printf("\n");
-	
-	  double exterior_poly=1.0;
-	  for(int j=0;j<Ndither*9;j++) if(poly_match[i][j] && (j!=4 && j!=13 && j!=22 && j!=31)) exterior_poly++;
-	  stack_area[count]+=(1./exterior_poly)*p_final[i].area;
-	}
-  for(int i=1;i<=4;i++) printf("%d exposures over area %g / deg^2, fraction %g\n",
-			      i,stack_area[i],stack_area[i]/tot_area);
-  double tot_stack=0.0;
-  for(int i=1;i<=4;i++) tot_stack += stack_area[i];
-  printf("fraction of area covered = %g\n",tot_stack/tot_area);
-
-  fclose(fout_overlaps);
   exit(0);
 }
 
+int find_rot(double a[2][3], double b[2][3], double rot[3][3]) {
 
+  int ncross_product(double[3],double[3],double[3]);
+
+  double aa[3][3], bb[3][3];
+
+  // find 3 orthogonal vectors of original pointing
+  for(int i=0;i<3;i++) aa[0][i] = a[0][i];
+  ncross_product(aa[0],a[1],aa[1]);
+  ncross_product(aa[0],aa[1],aa[2]);
+
+  // for(int i=0;i<3;i++) for(int j=0;j<3;j++) printf("aa[%d][%d]=%g\n",i,j,aa[i][j]);
+  
+  // find 3 orthogonal vectors of the rotated pointing
+  for(int i=0;i<3;i++) bb[0][i] = b[0][i];
+  ncross_product(bb[0],b[1],bb[1]);
+  ncross_product(bb[0],bb[1],bb[2]);
+
+  // for(int i=0;i<3;i++) for(int j=0;j<3;j++) printf("bb[%d][%d]=%g\n",i,j,bb[i][j]);
+  
+  // From Triad method, http://en.wikipedia.org/wiki/Triad_method, 
+  // matrix is (aa[0]:aa[1];aa[2])(bb[0]:bb[1]:bb[2])^T
+  for(int i=0;i<3;i++)
+    for(int j=0;j<3;j++) {
+      rot[i][j] = 0.0;
+      for(int k=0;k<3;k++) rot[i][j] += aa[k][i]*bb[k][j];
+    }
+  
+  return 1;
+}
+
+int ncross_product(double a[3], double b[3], double c[3]) {
+
+  // normalised cross product of 2 vectors
+  c[0]=a[1]*b[2]-a[2]*b[1];
+  c[1]=a[2]*b[0]-a[0]*b[2];
+  c[2]=a[0]*b[1]-a[1]-b[0];
+
+  double c_amp = sqrt(c[0]*c[0]+c[1]*c[1]+c[2]*c[2]);
+  for(int i=0;i<3;i++) c[i] /= c_amp;
+  
+  return 1;
+}
