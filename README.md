@@ -4,7 +4,7 @@ Will Percival & Dida Markovic, 2015
 
 INSTALLATION
 The test-calibration/README.bsh script compiles and runs all the code.
-Before you do that however, you should install Mangle2.2 by following the instructions in that sub-folder.
+Before you do that however, you should install Mangle (GitHub version!) by following the instructions. Place the 'mangle' folder into the main folder of the repo so the rest of the code can find it and so that git can ignore it nicely.
 
 If you have access to the Euclid Redmine, you can read a basic description of this here: http://euclid.roe.ac.uk/projects/gcswg/wiki/Calibration.
 

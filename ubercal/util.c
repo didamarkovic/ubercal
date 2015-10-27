@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 // #include <string>
-#include <cpgplot.h>
+//#include <cpgplot.h>
 
 const int   NR_END     = 1;  
 
@@ -320,8 +320,10 @@ void free_d3tensor(double ***t, long nrl, long nrh, long ncl, long nch,
 
 const int   IM1=2147483563;
 const int   IM2=2147483399;
-const float AM=(1.0/(float)IM1);
-const int   IMM1=(IM1-1);
+//const float AM=(1.0/(float)IM1);
+//const int   IMM1=(IM1-1);
+const float AM=(1.0/2147483563.0);
+const int   IMM1=2147483562;
 const int   IA1=40014;
 const int   IA2=40692;
 const int   IQ1=53668;
@@ -329,9 +331,11 @@ const int   IQ2=52774;
 const int   IR1=12211;
 const int   IR2=3791;
 const int   RAN2_NTAB=32;
-const int   NDIV=(1+IMM1/RAN2_NTAB);
+//const int   NDIV=(1+IMM1/RAN2_NTAB);
+const int   NDIV=(1+2147483562/32);
 const float RAN2_EPS=1.2e-7;
-const float RAN2_RNMX=(1.0-RAN2_EPS);
+//const float RAN2_RNMX=(1.0-RAN2_EPS);
+const float RAN2_RNMX=(1.0-1.2e-7);
 
 float ran2(long *idum)
 {
@@ -339,7 +343,7 @@ float ran2(long *idum)
   long k;
   static long idum2=123456789;
   static long iy=0;
-  static long iv[RAN2_NTAB];
+  static long iv[32];//RAN2_NTAB];
   float temp;
   
   if (*idum <= 0) {

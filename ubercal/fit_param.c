@@ -29,7 +29,7 @@ double (*nrfunc)(double []);
 void err_handler(const char*);
 
 const double R=0.61803399;
-const double C=(1.0-R);
+const double C=(1.0-0.61803399);
 
 // find minimum of f(x)
 double golden(double ax, double bx, double cx, double (*f)(double), 

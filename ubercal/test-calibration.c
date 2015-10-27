@@ -13,7 +13,9 @@ Send an email to Dida Markovic (dida.markovic@port.ac.uk)
 #include <math.h>
 #include <string.h>
 
-const int EMAX = 4; // maximum number of dithers - test for this on file input
+const int VERB = 0;
+
+const int EMAX = 4;  // maximum number of dithers - test for this on file input
 
 struct overlap_large {
   double area;             // area of overlap
@@ -22,7 +24,7 @@ struct overlap_large {
   int iexposure[EMAX];     // integers of exposure IDs included in this overlap
   double flux_calib[EMAX]; // normalised total flux measured for calibrators in this overlap
                            // - each exposure has its own measurement
-};
+}; // TODO: now it is ndetector & idetector, not exposure!
 struct overlap_large *p_overlap;
 
 // std error handler
@@ -46,30 +48,87 @@ double calc_chisq(double*);
 const double SIG_INIT = 0.04;                // 4% initial calibration
 long nexposure, noverlap;
 
+// buffer size
+const int bsz=800; 
+
 // calibration star densities and rms from Marco - simplified version of Dida's algorithm.
-const int NBIN_STAR=7;
-double rms_v[NBIN_STAR] = {0.00193, 0.00252, 0.00356, 0.00642, 0.01594, 0.04102, 0.11044};
-double dens_v[NBIN_STAR] = {319.0, 602.0, 975.0, 1563.0, 2343.0, 3321.0, 4288.0};
+//const int NBIN_STAR_DEF=7;
+//double rms_v_DEF[7] = {0.00193, 0.00252, 0.00356, 0.00642, 0.01594, 0.04102, 0.11044};
+//double dens_v_DEF[7] = {31.90, 60.20, 97.50, 156.30, 234.30, 332.10, 428.80};
+double *rms_v, *dens_v;
 
-int main() {
+int main(int argc, char *argv[]) {
 
-  const int bsz=800; char fname[bsz];
+  char fname[bsz], fpath[bsz], fstar[bsz]; long seed = -1;
+  int NDETX;
+
+  // ********************************************************************************
+  // read input parameter for random seed
+  if (argc > 1){
+    sscanf(argv[1], "%s", fpath);
+    sscanf(argv[2], "%ld", &seed);
+    if(VERB>0) printf("random seed = %ld\n",seed);
+  } else {
+    sscanf("./", "%s", fpath);
+  }
+  if(VERB>0) printf("Results in %s.\n",fpath);
+  if (argc > 3) {
+    sscanf(argv[3], "%s", fstar); 
+  } else {
+    sscanf("./stars.dat", "%s", fstar);
+  }
+  if(VERB>0) printf("Stars in %s.\n",fstar);
+  fflush(stdout);  
+
+  // ********************************************************************************
+  // read in stellar densities and RMS if file input
+  long NBIN_STAR;
+
+  FILE *fin_stars;
+  strcpy(fname, fstar);
+  if((fin_stars=fopen(fname,"r"))==NULL) {
+    strcat(fname, " <- test-calibration cannot open star file");
+    err_known(fname);
+  }
+  fscanf(fin_stars,"# %ld star types\n",&NBIN_STAR);
+  if(VERB>1) printf("Read in %ld stellar types.\n",NBIN_STAR);
+
+  // memory for stars input
+  if(!(rms_v = (double*)malloc(NBIN_STAR*sizeof(double))))
+    err_known("memory allocation problem for RMS");
+  if(!(dens_v = (double*)malloc(NBIN_STAR*sizeof(double))))
+    err_known("memory allocation problem for density");
+  
+  // Read stars from file
+  for(int i=0;i<NBIN_STAR;i++) {
+    if (fscanf(fin_stars,"%*d %lf %lf \n", &dens_v[i], &rms_v[i]) != 2){
+      strcat(fname, " <- test-calibration cannot read star file");
+      err_known(fname);
+    }
+    if(VERB>1) printf("RMS=%f, dens=%f\n", rms_v[i], dens_v[i]);
+  }
+  fclose(fin_stars);
+  fname[0] = '\0';
 
   // ********************************************************************************
   // read in survey mask element file
   long NX, NY, NDITH;
 
   FILE *fin_survey;
-  sprintf(fname,"full-survey-overlaps.txt");
-  if((fin_survey=fopen(fname,"r"))==NULL) err_known("cannot open input file");
-  fscanf(fin_survey,"# %ld dithers\n",&NDITH);
+  strcpy(fname, fpath);
+  strcat(fname, "full-survey-overlaps.txt");
+  if((fin_survey=fopen(fname,"r"))==NULL) {
+    strcat(fname, " <- test-calibration cannot open input file");
+    err_known(fname);
+    }
+  fscanf(fin_survey,"# %ld dithers, %d detectors squared\n",&NDITH,&NDETX);
   if(NDITH>EMAX) err_known("NDITH > EMAX");
   
   fscanf(fin_survey,"# NRA=%ld, NDEC=%ld\n",&NX,&NY);
-  nexposure = 16.0*NDITH*NX*NY;
+  nexposure = NDETX*NDETX*NDITH*NX*NY;
   fscanf(fin_survey,"# %ld overlap polygons\n",&noverlap);
 
-   // memory for overlap polygons input
+  // memory for overlap polygons input
   if(!(p_overlap = (struct overlap_large*)malloc(noverlap*sizeof(struct overlap_large)))) 
     err_known("memory allocation problem for overlaps");
   
@@ -79,20 +138,20 @@ int main() {
     fscanf(fin_survey,"\n");
   }
   fclose(fin_survey);
+  fname[0] = '\0';
 
-  printf("Read in %ld overlaps in survey\n",noverlap);
+  if(VERB>0) printf("Read in %ld overlaps in survey in %ld parent polygons.\n",noverlap,nexposure);
   
   // ********************************************************************************
   // set up initial calibration - all calibrators have these fluctuations in addition
   // their intrinsic measurement noise
-  long seed=-1;
   double old_calib[nexposure+1], new_calib[nexposure+1];
   for(int i=1;i<=nexposure;i++) old_calib[i] = SIG_INIT*gasdev(&seed);
 
   // slightly faster if you start with new_calib as the perfect answer (=-old_calib[i])
   // but this doesn't seem fair!
   for(int i=1;i<=nexposure;i++) new_calib[i]=0.0;
- 
+  
   // ********************************************************************************
   // set up mock flux measurements for each exposure of calibrators in overlaps
   for(int i=0;i<noverlap;i++) {
@@ -101,26 +160,30 @@ int main() {
     // loop over magnitude bins, and Poisson sampling each (to contain nstar stars),
     // gives a variance of the final variance of the calibration measurement
     // of 1/(sum_bins nstar/var)
-    double sigma = 0.0, nstar_tot=0.0;
+    double nstar_tot=0.0, sigma = 0.0;
     for(int istar=0;istar<NBIN_STAR;istar++) {
-      double nstar = poidev(p_overlap[i].area*dens_v[istar],&seed);
+      double nstar = poidev(p_overlap[i].area*dens_v[istar], &seed);
       sigma += nstar/(rms_v[istar]*rms_v[istar]);
       nstar_tot += nstar;
     }
-    if(nstar_tot>0) sigma = 1./sqrt(sigma);
+    if(nstar_tot>0 && sigma<1.0e100) sigma = 1./sqrt(sigma);
     else            p_overlap[i].nexposure=0;
+
+    if (VERB>1) printf("In overlap %d, the number of stars = %f and their RMS = %f.\n",i, nstar_tot, sigma);
 
     // actual flux measurement for each exposure in overlap, drawn from the same
     // distribution for the intrinsic noise, plus the initial calibration of that exposure
+    double f_star = sigma*gasdev(&seed);
     for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
-      if(nstar_tot>0) p_overlap[i].flux_calib[ie] = sigma*gasdev(&seed) + old_calib[p_overlap[i].iexposure[ie]+1];
+      if(f_star<1.0e-100) f_star=0.0;
+      if(nstar_tot>0) p_overlap[i].flux_calib[ie] = f_star + old_calib[p_overlap[i].iexposure[ie]+1];
       else            p_overlap[i].flux_calib[ie] = 0.0;
+      if(VERB>2) printf("The %g stars contribute to the f_meas = %g.\n", nstar_tot, p_overlap[i].flux_calib[ie]);
     }
-    
     // variance of distribution of measured fluxes around mean
     // the (N-1)/N factor allows for decreased scatter around measured mean
-    p_overlap[i].ssq_calib = (p_overlap[i].nexposure-1.)/p_overlap[i].nexposure * (sigma*sigma+SIG_INIT*SIG_INIT);
-    
+    //p_overlap[i].ssq_calib = (p_overlap[i].nexposure-1.)/p_overlap[i].nexposure * (sigma*sigma+SIG_INIT*SIG_INIT);;
+    p_overlap[i].ssq_calib = (sigma*sigma+SIG_INIT*SIG_INIT)/p_overlap[i].nexposure;
   }
 
   // exit(0);
@@ -140,21 +203,28 @@ int main() {
   // ********************************************************************************
   // now test post-ubercal calibrations - these are the initial calibrations
   // for each exposure as stored in old_calib + the best-fit new calibrations in new_calib
-  double sigmasq_init=0.0, sigmasq_final=0.0;
-  double mean_init=0.0, mean_final=0.0;
+  double mean_init=0.0, sigmasq_init=0.0;
+  double mean_final=0.0, sigmasq_final=0.0;
+  double mean_cal=0.0, sigmasq_cal=0.0;
   for(int i=1;i<=nexposure;i++) {
-    printf("Exposure %d, calib old %g, new %g\n",i,old_calib[i],old_calib[i]+new_calib[i]);
-    mean_init  += old_calib[i];
+    if(VERB>1) printf("Exposure %d, old flux %g, calibration %g, overlap mean %g\n",i,old_calib[i],new_calib[i], old_calib[i]+new_calib[i]);
+    mean_init  += old_calib[i]; 
     mean_final += old_calib[i]+new_calib[i]; 
+    mean_cal += new_calib[i];
     sigmasq_init  += old_calib[i]*old_calib[i];
     sigmasq_final += (old_calib[i]+new_calib[i])*(old_calib[i]+new_calib[i]);
+    sigmasq_cal += new_calib[i]*new_calib[i];
   }
   mean_init  /= (double)nexposure;
   mean_final /= (double)nexposure;
+  mean_cal /= (double)nexposure;
 
-  printf("Initial calibration %g, final calibration %g\n",
-	 sqrt(fabs(sigmasq_init/(double)nexposure-mean_init*mean_init)),
-	 sqrt(fabs(sigmasq_final/(double)nexposure-mean_final*mean_final)));
+  if(VERB>0) printf("Initial 0-point %g, final 0-point %g, calibrated by %g\n", mean_init, mean_final, mean_cal);
+
+  printf("Initial scatter %g, final scatter %g, calibration scatter %g\n",
+   sqrt(sigmasq_init/(double)nexposure),
+   sqrt(sigmasq_final/(double)nexposure),
+   sqrt(sigmasq_cal/(double)nexposure));
 
   exit(0);
 }
@@ -162,10 +232,14 @@ int main() {
 // this is the main function calculating chi^2
 double calc_chisq(double *new_calib) {
 
+  if(VERB>2) printf("\n--- NEW ITERATION ---\n");
+
   // this is the prior - we only expect calibrations of order the initial ones
   double chisq=0.0;
   for(int i=1;i<=nexposure;i++) chisq += new_calib[i]*new_calib[i];
   chisq /= (SIG_INIT*SIG_INIT);
+
+  if(VERB>2) printf("\tchisq_0 = %g\n", chisq);
 
   // this holds the new flux measurements for each calibrator in each overlap
   double *new_flux = malloc(EMAX*sizeof(double));
@@ -175,24 +249,31 @@ double calc_chisq(double *new_calib) {
 
       // new flux calibrations in overlaps
       for(int ie=0;ie<p_overlap[i].nexposure;ie++)
-	new_flux[ie] = p_overlap[i].flux_calib[ie]+new_calib[p_overlap[i].iexposure[ie]+1];
+        new_flux[ie] = p_overlap[i].flux_calib[ie]+new_calib[p_overlap[i].iexposure[ie]+1];
       
-      // mean flux in each overlap
-      double mean=0.0;
-      for(int ie=0;ie<p_overlap[i].nexposure;ie++) mean += new_flux[ie];
-      mean /= (double)p_overlap[i].nexposure;
+      // mean flux in each overlap//
+      double mean=0.0;//
+      for(int ie=0;ie<p_overlap[i].nexposure;ie++) mean += new_flux[ie];//
+        mean /= (double)p_overlap[i].nexposure;
+      if(VERB>2) printf("\tmean in overlap %d = %g\n", i, mean);
       
       // add to chi^2 for this overlap region from differences with mean
       // relies on ssq.calib being variance of exposure calibration measurements
       // around mean
       for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
-	double diff = new_flux[ie]-mean;
-	chisq += diff*diff / p_overlap[i].ssq_calib;
+        double diff = new_flux[ie]-mean;
+        chisq += diff*diff / p_overlap[i].ssq_calib;
       }
       
     }
   free(new_flux);
-  
+
+  if(VERB>2) {
+    printf("\tchisq_tot = %g at sig_i = %g and f_cal = ", chisq, SIG_INIT);
+    for(int i=1; i<=nexposure;i++) printf(" [%d:] %g", i, new_calib[i]);
+    printf("\n");
+  }
+
   return chisq;
 }
 
