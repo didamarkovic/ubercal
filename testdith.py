@@ -17,7 +17,7 @@ def get_timestamp():
 ################### GLOBALS: ################
 
 # Path for execution (either input or find)
-thispath = os.path.dirname(os.path.abspath(__file__)) + '/'
+thispath = os.path.dirname(os.path.abspath(__file__))
 
 # File where execution time and configuration are saved
 final_file = 'run.log'
@@ -34,7 +34,7 @@ def config_file(pats):
 	return fnm + '.ini'
 
 def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=None, mode='test', seed=None, dy=None, \
-	verb=False, rundir=thispath+'/outputs/'+ts, calipath=thispath+'/bin/', starfile=thispath+'/samples/stars.dat',cont=False):
+	verb=False, rundir=os.path.join(thispath, 'outputs/', ts), calipath=os.path.join(thispath,'bin'), starfile=os.path.join(thispath,'samples/stars.dat'),cont=False):
 
 	if cont: 
 		timestamp = seed
@@ -94,7 +94,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 	# First get the baseline and put it into the main run directory (if not testing)
 	# 	(This should some day just call a function and below as well!)
-	fname = rundir + 'baseline.dat'
+	fname = os.path.join(rundir, 'baseline.dat')
 	if (mode != 'test' or mode is not 'nobase') and not os.path.isfile(fname):
 
 		if verb: print "Getting the baseline..."
@@ -104,16 +104,24 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 		d = np.sqrt(bl[0]**2 + bl[1]**2) + np.sqrt(bl[2]**2 + bl[3]**2) + np.sqrt(bl[4]**2 + bl[5]**2)
 				
 		# Open baseline log files
-		pf = open(rundir + 'baseline_patch.out', "w")
-		cf = open(rundir + 'baseline_test.out', "w")
+		pf = open(os.path.join(rundir, 'baseline_patch.out'), "w")
+		cf = open(os.path.join(rundir, 'baseline_test.out'), "w")
 			
 		# Run Will's code with default dithers
-		call(['./create-euclid-patch', rundir, str(bl[0]), str(bl[1]), str(bl[2]), str(bl[3]), str(bl[4]), str(bl[5]), str(NX), str(NY)], stdout=pf, cwd = calipath);
-		call(['./test-calibration', rundir, seed, starfile], stdout=cf, cwd = calipath);
-
+		cmd = ['./create-euclid-patch', rundir+'/', str(bl[0]), str(bl[1]), str(bl[2]), str(bl[3]), str(bl[4]), str(bl[5]), str(NX), str(NY)]
+		try:
+			call(cmd, stdout=pf, cwd = calipath);
+		except OSError as e:
+			raise Exception('\n\tThe following command failed:\n\t' + ' '.join(cmd) + '\n\tin folder:\n\t' + calipath + '\n\twith the error:\n\t' + str(e))
+		cmd = ['./test-calibration', rundir+'/', seed, starfile]
+		try:
+			call(cmd, stdout=cf, cwd = calipath);
+		except OSError as e:
+			raise Exception('\n\tThe following command failed:\n\t' + ' '.join(cmd) + '\n\tin folder:\n\t' + calipath + '\n\twith the error:\n\t' + str(e))
+		
 		# Now get the area in patch info
 		line = None
-		with open(rundir + 'baseline_patch.out', "r") as pf:
+		with open(os.path.join(rundir, 'baseline_patch.out'), "r") as pf:
 			frac=[]
 			for line in pf: 
 				try:
@@ -129,7 +137,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 		# Now get last line of the file
 		pf.close(); cf.close()
-		cf = open(rundir + 'baseline_test.out', "r")
+		cf = open(os.path.join(rundir,'baseline_test.out'), "r")
 		for line in cf: 
 			if verb: pass
 		# The last line should be like: 
@@ -151,12 +159,13 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 			if verb: print "Doing the " + pattern[p] + "-pattern now."
 
 			# Save the directory for this pattern in the run directory
-			patdir = rundir + pattern[p]
+			patdir = os.path.join(rundir,pattern[p])
 			if mode is 'test':
 				patdir += '-'
-			else:
-				patdir += '/'		
-				if not os.path.isdir(patdir): call(['mkdir',patdir])
+			else:	
+				if not os.path.isdir(patdir): 
+					call(['mkdir',patdir])
+					if verb: print "Created " + os.path.dirname(patdir)
 
 			# Build up an array of dither strategy multiples
 			# 	it is in arcsec (n.b. one CCD is 2040 pixel = 612", gap about 50", 100")
@@ -196,12 +205,12 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 				d = np.sqrt(x1**2 + y1**2) + np.sqrt(x2**2 + y2**2) + np.sqrt(x3**2 + y3**2)
 						
 				# Create directory for this dither size
-				outdir = patdir + 'dithersize-' + str(x1) + '/'
-				if not os.path.isdir(outdir): call(['mkdir', outdir])
+				outdir = os.path.join(patdir, 'dithersize-'+str(x1))
+				if not os.path.isdir(outdir): call(['mkdir', outdir+'/'])
 				
 				# Create mangle result files
 				skippatch = False
-				patchfile = outdir + 'patch-' + str(x1) + '.out'
+				patchfile = os.path.join(outdir, 'patch-'+str(x1)+'.out')
 				#if os.path.isfile(patchfile):
 				#	pf = open(patchfile, "r")
 				#	for line in pf: pass
@@ -216,7 +225,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 					if not skippatch:
 						# Run Will's code by calling bash
 						pf = open(patchfile, "w")
-						call(['./create-euclid-patch', outdir, str(x1), str(y1), str(x2), str(y2), str(x3), str(y3), str(nx), str(ny)], stdout=pf, cwd = calipath)
+						call(['./create-euclid-patch', outdir+'/', str(x1), str(y1), str(x2), str(y2), str(x3), str(y3), str(nx), str(ny)], stdout=pf, cwd = calipath)
 						pf.close();
 
 					# Now get the area in patch info
@@ -235,8 +244,8 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 					if verb: print "Calibration for a survey with " + str(nx) + "x" + str(ny) + " pointings."
 
-					outdira = outdir + str(nx) + "x" + str(ny) + "/"
-					califile = outdir + 'test-' + str(x1) +'.out'		
+					outdira = os.path.join(outdir, str(nx)+'x'+str(ny))
+					califile = os.path.join(outdir, 'test-'+str(x1)+'.out')		
 					if not os.path.isfile(califile):
 
 						if verb: print "No " + califile
@@ -245,7 +254,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 						cf = open(califile, "w")
 					
 						# Run Will's code by calling bash
-						call(['./test-calibration', outdir, seed, starfile], stdout=cf, cwd = calipath)
+						call(['./test-calibration', outdir+'/', seed, starfile], stdout=cf, cwd = calipath)
 						cf.close();
 						
 						# Now get last line of the file (to get initial and final claibrations)
@@ -265,7 +274,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 							cf = open(califile, "w")
 						
 							# Run Will's code by calling bash
-							call(['./test-calibration', outdir, seed, starfile], stdout=cf, cwd = calipath)
+							call(['./test-calibration', outdir+'/', seed, starfile], stdout=cf, cwd = calipath)
 							cf.close();
 							
 							cf = open(califile, "r")
@@ -294,7 +303,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 			# Save all calibrations from each pattern into a file (or append if it exists)
 			dither_arr = np.array(dither_arr)
-			fname = rundir + pattern[p] + '.dat'
+			fname = os.path.join(rundir, pattern[p]+'.dat')
 			if verb: print "Saving result array to " + fname + "."
 			if os.path.isfile(fname):
 				#fa = file(fname, 'a')
@@ -314,11 +323,11 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 	
 	if mode is 'test': outtext.extend(['This was a run in test mode.'])
 	if mode is 'base': outtext = ['Run took ' + duration + ' seconds for baseline dither config.']
-	np.savetxt(rundir + final_file, outtext, fmt='# %s')
+	np.savetxt(os.path.join(rundir, final_file), outtext, fmt='# %s')
 	
 	print outtext[0]
 
-	return timestamp, rundir + final_file
+	return timestamp, os.path.join(rundir,final_file)
 
 
 ######################################################### MAIN ############################################
@@ -326,21 +335,28 @@ if __name__=='__main__':
 	import argparse
 
 	parser = argparse.ArgumentParser(description="Calculate self-calibration quality for different dither patterns.")
-	group = parser.add_mutually_exclusive_group()
-	group.add_argument("-m", "--mode", type=str, default='test', help="mode of execution: leave blank for production, 'test' for a simple test, 'base' for only baseline J-pattern, 'nobase' to skip calculating for the baseline, 'area':study variation with survey size (number of pointings) ")
-	group.add_argument("-t", "--test", action='store_true', default=False, help="mode = 'test'")
+	
+	# General options
 	parser.add_argument("-v", "--verbose", default=False, action="store_true")
 	parser.add_argument("-f", "--carryon", default=False, action="store_true", help="continue a previous run")
 	
+	# Mutually exclusive mode arguments
+	mode_group = parser.add_mutually_exclusive_group()
+	mode_group.add_argument("-m", "--mode", type=str, default='test', help="mode of execution: leave blank for production, 'test' for a simple test, 'base' for only baseline J-pattern, 'nobase' to skip calculating for the baseline, 'area':study variation with survey size (number of pointings) ")
+	mode_group.add_argument("-t", "--test", action='store_true', default=False, help="mode = 'test'")
+	
 	# These should be a non-mutually exclusive group:
-	parser.add_argument("-n", "--nsizes", type=int, default=1, help="number of pattern sizes to run (max set by xmax argument)")
 	parser.add_argument("-x", "--xmax", type=float, default=50.0, help="x-displatement of first dither")
 	parser.add_argument("-y", "--ymax", type=float, default=None, help="y-displatement of first dither")
 	parser.add_argument("-p", "--patterns", nargs='+', default=PATTERNS, help="dithering patterns to test: implemented: J, step, S, box")
 	parser.add_argument("-s", "--seed", type=int, default='-'+ts, help="random seed for stellar density")
-	parser.add_argument("-nx", type=int, default=3, help="number of pointins in survey in x-direction (RA)")
-	parser.add_argument("-ny", type=int, default=None, help="number of pointins in survey in y-direction (dec)")
-	parser.add_argument("-a", "--surveys", type=int, default=None, help="how many survey sizes to test")
+	parser.add_argument("-nx", type=int, default=3, help="number of pointings in survey in x-direction (RA)")
+	parser.add_argument("-ny", type=int, default=None, help="number of pointings in survey in y-direction (dec)")
+	
+	# As below, these two should be mutually exclusive for safety. Setting both of them runs, but hasn't been tested.
+	mode_group_2 = parser.add_mutually_exclusive_group()
+	mode_group_2.add_argument("-n", "--nsizes", type=int, default=1, help="number of pattern sizes to run (max set by xmax argument)")
+	mode_group_2.add_argument("-a", "--surveys", type=int, default=None, help="how many survey sizes to test")
 
 	parser.add_argument("-o", "--outpath", default=thispath, help="where you want or have your 'outputs' folder")
 	parser.add_argument("-c", "--calipath", default=thispath+"/bin/", help="directory containing test-calibration binaries")
@@ -348,24 +364,30 @@ if __name__=='__main__':
 
 	# Save the inputs:
 	args = parser.parse_args()
+
+	# Set the missing redundant settings:
 	if not args.surveys == None: 
 		args.mode = 'area'
 	elif (args.nsizes or args.xmax or args.ymax or args.patterns or args.seed) and args.mode=='test':
 		args.mode = 'producion'	
 	
+	# As above, these two should be mutually exclusive for safety. Setting both of them runs, but hasn't been tested.
+	if args.nsizes > 1 and args.mode=='area': raise Exception("argument -n/--nsizes not allowed in area mode")
+
 	# Make directory structure for outputs for this run
-	rundir = args.outpath + 'outputs/' + str(args.seed) + '/'
-	if not os.path.isdir(args.outpath + 'outputs'):
-		call(['mkdir', args.outpath + 'outputs'])
-		print "Created " + args.outpath  + 'outputs'
-		call(['mkdir',rundir])
+	rundir = os.path.join(args.outpath, 'outputs/', str(abs(args.seed)))
+	if not os.path.isdir(os.path.join(args.outpath,'outputs')):
+		call(['mkdir', os.path.dirname(rundir)])
+		call(['mkdir', rundir])
+		print "Created " + os.path.dirname(rundir)
 	# If the given seed has no directory, create one from the timestamp
-	elif not os.path.isdir(args.outpath + 'outputs/' + str(args.seed)):
-		call(['mkdir',rundir])
+	elif not os.path.isdir(rundir):
+		call(['mkdir', rundir])
+		if args.verbose: print "Created " + os.path.dirname(rundir)
 			
 	# Save the configuration explicitly (no INTERRUPTED at end):
 	config_file = config_file(args.patterns)
-	f = open(rundir+config_file,'w')
+	f = open(os.path.join(rundir, config_file),'w')
 	if args.carryon: 
 		print "... CONTINUING INTERRUPTED RUN " + str(args.seed) + "."
 		f.write("# This run was interrupted and restarted.\n")

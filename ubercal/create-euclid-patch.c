@@ -16,7 +16,6 @@ const double XBIT=0.1; // offset allowed when polygon matching in arcsec - corre
 
 const int NRA_DEF = 3;   // number of exposures in x - direction
 const int NDEC_DEF = 3;  // number of exposures in y - direction
-const int NDITH = 4; // number of dithers of each exposure (must match dither vector below)
 const int NDETX_DEF = 4; // number of detectors along x-axis (assume y-axis is same)
 
 struct poly {
@@ -24,8 +23,9 @@ struct poly {
   double area;
   double corners[4][2];
   int nexposure;
-  int iexposure[NDITH]; // integers of exposures included in this overlap - max of one from each dither
+  int iexposure[4]; // integers of exposures included in this overlap - max of one from each dither
 };
+const int NDITH = 4; //number of dithers of each exposure - must match dither vector above!
 
 // std error handler
 void err_known(const char *error_text)

@@ -97,30 +97,71 @@ class Poly(object):
 	def parents(self, parentlist):
 		pass
 
-def add_Polys(axes, polygons, col='g', maxa=1.0, ignore_weights=[], lw=0., verts=False):
+def add_Polys(axes, polygons, col='g', maxa=1.0, weights=[], lw=0., verts=False, lc=None):
 	""" Add a list of Poly objects to axes and return the unique weights for the legend """
 
+	# Initial checks of inputs
+	assert len(weights) <= len(polygons)
 	assert maxa>=0 and maxa<=1
-	weights = [polygons[i].weight for i in range(len(polygons))]
-	pass_range = float(max(weights)) + PRECISION # Normalise the alpha range
-	donew = ignore_weights*int(pass_range)
-	forlegp = []*int(pass_range)
-	forlegc = []*int(pass_range)
 
+	# Which polygon weights to use
+	if len(weights)==len(polygons):
+		replaceweights = True
+		all_weights = weights
+	else:
+		replaceweights = False
+		all_weights = [polygons[i].weight for i in range(len(polygons))]
+		
+	# Whether to indicate weight by colour or alpha level
+	if isinstance(weights, dict): 
+		colors = True
+	else:
+		colors = False
+		pass_range = float(max(all_weights)) + PRECISION # Normalise the alpha range
+	
+	forlegp = []
+	forlegc = []
+	donew = []
+	i = 0
 	for p in polygons:
-		fcol = colorConverter.to_rgba(col, p.weight/pass_range*maxa)
-		pp = Polygon(p.vrt, linewidth=lw, fc=fcol, ec=col)
+
+		# Set colour depending on options
+		if replaceweights:
+			weight = weights[i]
+			i+=1
+		else:
+			weight = p.weight
+		if colors:
+			try:
+				fcol = weights[weight]
+			except KeyError:
+				weight = -1
+		else:
+			fcol = colorConverter.to_rgba(col, weight/pass_range*maxa)
+
+		if weight == -1: continue
+
+		if lc is None: 
+			ec = fcol
+		else:
+			ec = lc
+			
+		# Generate polygons and add it to axes
+		pp = Polygon(p.vrt, linewidth=lw, fc=fcol, ec=ec)
 		axes.add_patch(pp)
 
+		# Plot the vertices
 		if verts is not False:
 			verts = pp.get_xy().T
 			axes.plot(verts[0],verts[1],col+'.')
 
+		# Keep track of which weight values were added for the legend
 		if p.weight not in donew:
 			forlegp.append(pp)
 			forlegc.append(int(p.weight))
 			donew.append(p.weight)
-
+	
+	# Return sorted legend entries
 	sort = np.argsort(forlegc)
 	return list(np.array(forlegp)[sort]), list(np.array(forlegc)[sort])
 

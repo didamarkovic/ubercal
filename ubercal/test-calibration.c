@@ -15,16 +15,16 @@ Send an email to Dida Markovic (dida.markovic@port.ac.uk)
 
 const int VERB = 0;
 
-const int EMAX = 4;  // maximum number of dithers - test for this on file input
-
 struct overlap_large {
   double area;             // area of overlap
   double ssq_calib;        // sigma^2 for calibrators in this exposure covering the overlap region
   int nexposure;           // number of exposures
-  int iexposure[EMAX];     // integers of exposure IDs included in this overlap
-  double flux_calib[EMAX]; // normalised total flux measured for calibrators in this overlap
+  int iexposure[4];     // integers of exposure IDs included in this overlap
+  double flux_calib[4]; // normalised total flux measured for calibrators in this overlap
                            // - each exposure has its own measurement
 }; // TODO: now it is ndetector & idetector, not exposure!
+const int EMAX = 4;  // maximum number of dithers initiate in the overlap_large struct - test for this on file input
+
 struct overlap_large *p_overlap;
 
 // std error handler
@@ -173,17 +173,16 @@ int main(int argc, char *argv[]) {
 
     // actual flux measurement for each exposure in overlap, drawn from the same
     // distribution for the intrinsic noise, plus the initial calibration of that exposure
-    double f_star = sigma*gasdev(&seed);
     for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
-      if(f_star<1.0e-100) f_star=0.0;
-      if(nstar_tot>0) p_overlap[i].flux_calib[ie] = f_star + old_calib[p_overlap[i].iexposure[ie]+1];
+      if(nstar_tot>0) {
+        p_overlap[i].flux_calib[ie] = sigma*gasdev(&seed) + old_calib[p_overlap[i].iexposure[ie]+1];
+      }
       else            p_overlap[i].flux_calib[ie] = 0.0;
       if(VERB>2) printf("The %g stars contribute to the f_meas = %g.\n", nstar_tot, p_overlap[i].flux_calib[ie]);
     }
     // variance of distribution of measured fluxes around mean
-    // the (N-1)/N factor allows for decreased scatter around measured mean
-    //p_overlap[i].ssq_calib = (p_overlap[i].nexposure-1.)/p_overlap[i].nexposure * (sigma*sigma+SIG_INIT*SIG_INIT);;
-    p_overlap[i].ssq_calib = (sigma*sigma+SIG_INIT*SIG_INIT)/p_overlap[i].nexposure;
+    // the (N-1)/N factor allows for decreased scatter around measured mean - decided this should not be used here
+    p_overlap[i].ssq_calib = sigma*sigma+SIG_INIT*SIG_INIT;
   }
 
   // exit(0);
@@ -253,8 +252,13 @@ double calc_chisq(double *new_calib) {
       
       // mean flux in each overlap//
       double mean=0.0;//
-      for(int ie=0;ie<p_overlap[i].nexposure;ie++) mean += new_flux[ie];//
-        mean /= (double)p_overlap[i].nexposure;
+      double weight_norm = 0.0;
+      for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
+        mean += new_flux[ie]/p_overlap[i].ssq_calib;//p_overlap[i].ssq_calib;//
+        weight_norm += 1.0/p_overlap[i].ssq_calib;//p_overlap[i].ssq_calib;
+      }
+      //mean /= (double)p_overlap[i].nexposure;
+      mean /= weight_norm;
       if(VERB>2) printf("\tmean in overlap %d = %g\n", i, mean);
       
       // add to chi^2 for this overlap region from differences with mean

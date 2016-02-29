@@ -14,6 +14,10 @@ import numpy as np
 import subprocess as sp
 import os.path as op
 from glob import glob
+from warnings import warn
+
+import matplotlib.pyplot as plt
+import plotpolys as pp
 
 # Instrument model
 NDETX = 4
@@ -25,7 +29,7 @@ YDET = XDET
 SCALE = 3600.0
 PRECISION = 0.1 # in arcsec
 
-patterns = {
+PATTERNS = {
 	'J': np.array([   XGAP,YGAP,   0.0,YGAP,   0.0, YGAP]),
 	'S': np.array([   XGAP,YGAP,   0.0,YGAP,  XGAP, YGAP]),
 	'step': np.array([XGAP,YGAP, XGAP,  0.0,  XGAP,  0.0]),
@@ -35,7 +39,7 @@ patterns = {
 	}
 
 # Path for execution (either input or find)
-thispath = op.dirname(op.abspath(__file__)) + '/'
+HERE = op.dirname(op.abspath(__file__)) + '/'
 
 def build(path, target, verb=False):
 	""" Build all the targets in the path, assuming there is a Makefile present there."""
@@ -66,6 +70,11 @@ def create_euclid_patch(dithvec, outpath, nra=1, ndec=1, ndetx=4, binary='create
 	# Construct the call with the correct input arguments
 	bindir, binfile = op.split(binary)
 	cmd = ['./'+binfile,outpath] + [str(x) for x in dithvec] + [str(nra), str(ndec), str(ndetx)]
+	if verb>1: print ' '.join(cmd)
+
+	# Check that the binary exists
+	if not op.isfile(binary):
+		raise Exception('Binary ' + binary + " doesn't exist. Perhaps you forgot to run make.")
 
 	# Use subprocess to run the Mangle-calling, mask-creating code
 	try:
@@ -80,7 +89,7 @@ def create_euclid_patch(dithvec, outpath, nra=1, ndec=1, ndetx=4, binary='create
 	elif verb:
 		print out
 
-	out = glob(outpath+'*.vrt')
+	out = [outpath+'full-survey.vrt', outpath+'full-survey-overlaps.vrt']
 	out.sort(key=len)
 	return out
 
@@ -97,6 +106,7 @@ def read_vrt(filename, verb=False, COORD_SCALE=SCALE):
 		
 		l = 0
 		r = 0
+		nonrec = False
 		for line in f:
 			line = line.strip().split()
 			
@@ -116,10 +126,17 @@ def read_vrt(filename, verb=False, COORD_SCALE=SCALE):
 				l+=1
 			
 			elif 'vertices' not in line:
+				verts = np.array(line).astype(float)/COORD_SCALE
 				try:
-					rectangles[r,2:] = np.array(line).astype(float)/COORD_SCALE
-				except ValueError:
-					raise Exception("You have non-rectangles in your .vrt file!")
+					rectangles[r,2:] = verts
+				except ValueError as e:
+					if not nonrec:
+						if verb: print "Non-rectangles found in your .vrt file!\n" + '\t' + filename
+						if verb: print "Squashing those of the following that have nverts > 4 and leaving those that have nverts < 4:"
+						nonrec = True
+					rectangles[r,2:] = union_rectangle(verts)
+					if verb: print "Polygon no."+str(int(rectangles[r,0]))+" has " + str(len(verts)/2) + " vertices, squash to: " + '[' + ','.join(format(x, ".3f") for x in rectangles[r,2:]) + ']'
+					
 				l+=1
 				r+=1
 	
@@ -199,8 +216,15 @@ def overlaps(rec1, rec2, verb=False):
 def union_rectangle(rectangles):
 	""" Returns the all-encompassing ractangle, assuming edges of all input
 		rectangles are aligned with the x-y axes. """
-	x1, x2 = [np.min(rectangles[:,::2]), np.max(rectangles[:,::2])]
-	y1, y2 = [np.min(rectangles[:,1::2]), np.max(rectangles[:,1::2])]
+	ndim = len(rectangles.shape)
+	if ndim==1:
+		x1, x2 = [np.min(rectangles[::2]), np.max(rectangles[::2])]
+		y1, y2 = [np.min(rectangles[1::2]), np.max(rectangles[1::2])]
+	elif ndim==2:
+		x1, x2 = [np.min(rectangles[:,::2]), np.max(rectangles[:,::2])]
+		y1, y2 = [np.min(rectangles[:,1::2]), np.max(rectangles[:,1::2])]
+	else:
+		raise Exception("Input must be an array of rows of vertices => a 2d numpy array!")
 	return np.array([x1,y1, x2,y1, x2,y2, x1,y2])
 
 def intersect_rectangle(rectangles, verb=False):
@@ -233,11 +257,11 @@ def full_coverage(rectangles, verb=False):
 	# Now return the intersection
 	return intersect_rectangle(verts)
 
-def central_pointing(origin):
+def central_pointing(origin, COORD_SCALE=SCALE):
 	""" Given the survey parametres, return the 4 vertices of the "square of influence"
 		of the central pointing: i.e. pointing + gap. """
-	xpoint = np.array([NDETX*(XGAP+XDET), 0.0])/SCALE
-	ypoint = np.array([0.0, NDETY*(YGAP+YDET)])/SCALE
+	xpoint = np.array([NDETX*(XGAP+XDET), 0.0])/COORD_SCALE
+	ypoint = np.array([0.0, NDETY*(YGAP+YDET)])/COORD_SCALE
 	origin = np.array(origin) + xpoint + ypoint
 	return np.array([origin, origin+xpoint, origin+xpoint+ypoint, origin+ypoint]).reshape(8)
 
@@ -287,7 +311,7 @@ def _str(r):
 			out += "#%+03d at (%+03.3f,%+03.3f), (%+03.3f,%+02.3f), (%+03.3f,%+02.3f), (%+03.3f,%+02.3f)\n" % tuple([j]+list(i))
 		return out
 
-def crop_survey(rectangles, cropvec, verb=False):
+def crop_survey(rectangles, cropvec, verb=False, drop=False):
 	""" Only keep the survey area of 4-passes as if there were no chip and pointing gaps.
 		This will break if we are on a sphere! E.g. if RA ~ 0! """
 	
@@ -306,6 +330,9 @@ def crop_survey(rectangles, cropvec, verb=False):
 		else:
 			rec[1] = 0
 	if verb>2: print _str(rectangles)
+
+	if drop:
+		rectangles = rectangles[rectangles[:,1]!=0]
 
 	return rectangles
 
@@ -334,10 +361,35 @@ def coverage(rectangles, tot_lims=None):
 
 	return covperpass, total
 
-def _test(outv, zoomin=True, verts=False):
+def survey_coverage(dithvec=PATTERNS['J'], binary='./bin/create-euclid-patch', outpath='./', verb=0):
+	""" Do the full calculation from input parameters to coverage. """
 
-	import matplotlib.pyplot as plt
-	import plotpolys as pp
+	# Always get a 3x3 survey so that can examine the central part
+	npoint = 3
+	# Note that this puts a restriction on how big the size parameter can be
+
+	# Run the create-euclid-patch.c overcal code to construct the Mangle mask
+	inv, outv = create_euclid_patch(dithvec, outpath, nra=npoint, ndec=npoint, ndetx=NDETX, binary=binary, verb=verb)
+
+	# Read the Mangle in- & output file
+	inv = read_vrt(inv, verb=verb)
+	outv = read_vrt(outv, verb=verb)
+	origin = (np.min(inv[:,2::2]), np.min(inv[:,3::2]))
+
+	# Find patch of full coverage
+	#lim_rec = full_coverage(inv[:,2:], verb=arg.verb)
+	lim_rec = central_pointing(origin)
+
+	# Identify the edges that are close
+	tmp = snap(np.vstack([lim_rec, outv[:,2:]]))
+	lim_rec = tmp[0]; outv[:,2:] = tmp[1:]; tmp = None
+
+	# Now throw away the polygons that not in the full coverage patch of the survey
+	outv = crop_survey(outv, lim_rec, verb=verb)
+
+	return outv, lim_rec
+
+def _test(outv, lim_rec, zoomin=True, verts=False):
 
 	nout = outv.shape[0]
 	polys = [0]*nout
@@ -358,20 +410,24 @@ def _test(outv, zoomin=True, verts=False):
 	plt.ylim([min(l[1])*1.1-max(l[1])*0.1, max(l[1])*1.1]- min(l[1])*0.1)
 	ax.set_aspect('equal', adjustable='box')
 	plt.ticklabel_format(useOffset=False)
-	plt.show()
-
-
+	plt.xlabel("RA [deg]")
+	plt.ylabel("dec [deg]")
+	
 if __name__=='__main__':
 
 	import argparse
-	p = argparse.ArgumentParser(description="Generate the Euclid survey geometry adn calculate N-pass coverage.")
+	p = argparse.ArgumentParser(description="Generate the Euclid survey geometry and calculate n-pass coverage.")
 	p.add_argument("--pattern", "-p", default="J", choices=["J", "step", "S", "N", "X", "box"], help="Name of dither pattern.")
 	p.add_argument("--size", "-s", default=1.0, type=float, help="Scale of dither, SIZE=1 means d_x=50'', d_y=100''.")
-	p.add_argument("-o", "--outpath", default=op.join(thispath,"outputs/"), help="where you want your output files")
-	p.add_argument("-c", "--srcpath", default=op.join(thispath,"ubercal/"), help="directory containing test-calibration source code")
+	p.add_argument("-o", "--outpath", default=op.join(HERE,"outputs/"), help="where you want your output files")
+	p.add_argument("-c", "--srcpath", default=op.join(HERE,"ubercal/"), help="directory containing test-calibration source code")
 	p.add_argument("-v", "--verb", default=0, type=int, help="verbosit y level. 0 for silent.")
 	p.add_argument("-b", "--bin", default=None, help="Location of binaries if no need for compilation.")
 	arg = p.parse_args()
+
+	# Since only calculating a 3x3 survey, need to warn if size of dither is too big
+	if arg.size > 2.0:
+		warn("The coverage calculation is not guaranteed to work for very large dithers!")
 
 	# Make sure we have built the latest version of the c-code
 	target = 'create-euclid-patch'
@@ -381,27 +437,10 @@ if __name__=='__main__':
 		binary = op.join(arg.bin,target)
 
 	# Survey parameters
-	npoint = 3
-	dithvec = arg.size*patterns[arg.pattern]
+	dithvec = arg.size*PATTERNS[arg.pattern]
 
-	# Run the create-euclid-patch.c overcal code to construct the Mangle mask
-	inv, outv = create_euclid_patch(dithvec, arg.outpath, nra=npoint, ndec=npoint, ndetx=NDETX, binary=binary, verb=arg.verb)
-
-	# Read the Mangle in- & output file
-	inv = read_vrt(inv, verb=arg.verb)
-	outv = read_vrt(outv, verb=arg.verb)
-	origin = (np.min(inv[:,2::2]), np.min(inv[:,3::2]))
-
-	# Find patch of full coverage
-	#lim_rec = full_coverage(inv[:,2:], verb=arg.verb)
-	lim_rec = central_pointing(origin)
-
-	# Identify the edges that are close
-	tmp = snap(np.vstack([lim_rec, outv[:,2:]]))
-	lim_rec = tmp[0]; outv[:,2:] = tmp[1:]; tmp = None
-
-	# Now throw away the polygons that not in the full coverage patch of the survey
-	outv = crop_survey(outv, lim_rec, verb=arg.verb)
+	# Run code
+	outv, lim_rec = survey_coverage(dithvec, binary, arg.outpath, arg.verb)
 
 	# Calculate coverage
 	cov, tot = coverage(outv, lim_rec)
@@ -411,5 +450,7 @@ if __name__=='__main__':
 
 	# Test this module if verbosity is at debug level (i.e. 2)
 	if arg.verb==2:
-		_test(outv)	
+		_test(outv, lim_rec)
+		plt.title(arg.pattern+'-pattern' + ', dx = '+str(round(dithvec[0],1)) + "'' & dy = "+str(round(dithvec[1],1))+"''")
+		plt.show()	
 
