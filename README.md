@@ -25,6 +25,8 @@ Before you do that however, you should install Mangle (GitHub version!) by follo
 
 ## FURTHER INFO
 
+The survey and instrument specifications have been taken from the [NISP page](http://www.euclid-ec.org/?page_id=2490) on the Euclid Consortium website, the [Euclid Redbook](https://arxiv.org/abs/1110.3193) and the [Prieto et al., end of Phase B1 study](http://www.congrexprojects.com/custom/icso/2012/papers/FP_ICSO-160.pdf).
+
 If you have access to the Euclid Redmine, you can read a basic description of this on the [Euclid Redmine](http://euclid.roe.ac.uk/projects/gcswg/wiki/Calibration).
 
 The original Ubercal paper is the [Padmanabhan et al, 2007](http://arxiv.org/abs/astro-ph/0703454), however, our algorithm is even simpler, since we are doing only simulations.
