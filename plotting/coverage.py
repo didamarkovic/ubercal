@@ -377,7 +377,7 @@ def survey_coverage(dithvec=PATTERNS['J'], binary='./bin/create-euclid-patch', o
 	npoint = 3
 	# Note that this puts a restriction on how big the size parameter can be
 
-	# Run the create-euclid-patch.c overcal code to construct the Mangle mask
+	# Run the create-euclid-patch.c ubercal code to construct the Mangle mask
 	inv, outv = create_euclid_patch(dithvec, outpath, nra=npoint, ndec=npoint, ndetx=NDETX, binary=binary, verb=verb)
 
 	# Read the Mangle in- & output file
