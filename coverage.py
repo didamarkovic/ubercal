@@ -32,14 +32,23 @@ PRECISION = 0.1 # in arcsec
 PATTERNS = {
 	'J': np.array([   XGAP,YGAP,   0.0,YGAP,   0.0, YGAP]),
 	'S': np.array([   XGAP,YGAP,   0.0,YGAP,  XGAP, YGAP]),
-	'step': np.array([XGAP,YGAP, XGAP,  0.0,  XGAP,  0.0]),
+	'step': np.array([XGAP,YGAP, XGAP,  0.0,  XGAP,  0.0]), # deprecate
+	'R': np.array([XGAP,YGAP, XGAP,  0.0,  XGAP,  0.0]),
 	'N': np.array([   XGAP,YGAP, XGAP,  0.0,  XGAP, YGAP]),
 	'X': np.array([   XGAP,YGAP,  0.0,  0.0, -XGAP,-YGAP]),
-	'box': np.array([ XGAP, 0.0,  0.0,100.0, -XGAP,  0.0])
+	'box': np.array([ XGAP, 0.0,  0.0,100.0, -XGAP,  0.0]), # deprecate
+	'O': np.array([ XGAP, 0.0,  0.0,100.0, -XGAP,  0.0])
 	}
 
 # Path for execution (either input or find)
 HERE = op.dirname(op.abspath(__file__)) + '/'
+
+def convpat(pat):
+	if pat=='box': 
+		pat='O'
+	elif pat=='step':
+		pat='R'
+	return pat
 
 def build(path, target, verb=False):
 	""" Build all the targets in the path, assuming there is a Makefile present there."""
@@ -389,8 +398,13 @@ def survey_coverage(dithvec=PATTERNS['J'], binary='./bin/create-euclid-patch', o
 
 	return outv, lim_rec
 
-def _test(outv, lim_rec, zoomin=True, verts=False):
+def _test(outv, lim_rec, dithv, verts=False):
 
+	l = lim_rec.reshape(4,2)
+	dithv = np.cumsum(np.array([0,0] + list(dithv)).reshape(4,2),0) + l[0]
+	l = zip(*l)
+	dithv = zip(*dithv)
+	
 	nout = outv.shape[0]
 	polys = [0]*nout
 	for i,poly in zip(range(nout), outv):
@@ -402,10 +416,7 @@ def _test(outv, lim_rec, zoomin=True, verts=False):
 	fig, ax = plt.subplots()
 	pp.add_Polys(ax, polys, maxa=0.99, lw=1., verts=verts)
 	pp.add_Polys(ax, [limp], maxa=0.0, lw=5., verts=verts, col='m')
-	if zoomin:
-		l = zip(*lim_rec.reshape(4,2))
-	else:
-		l = zip(*union_rectangle(outv[:,2:]).reshape(4,2))
+	plt.plot(dithv[0], dithv[1], 'k.-')
 	plt.xlim([min(l[0])*1.1-max(l[0])*0.1, max(l[0])*1.1 - min(l[0])*0.1]); 
 	plt.ylim([min(l[1])*1.1-max(l[1])*0.1, max(l[1])*1.1]- min(l[1])*0.1)
 	ax.set_aspect('equal', adjustable='box')
@@ -417,7 +428,7 @@ if __name__=='__main__':
 
 	import argparse
 	p = argparse.ArgumentParser(description="Generate the Euclid survey geometry and calculate n-pass coverage.")
-	p.add_argument("--pattern", "-p", default="J", choices=["J", "step", "S", "N", "X", "box"], help="Name of dither pattern.")
+	p.add_argument("--pattern", "-p", default="S", choices=["J", "step", "S", "N", "X", "box"], help="Name of dither pattern.")
 	p.add_argument("--size", "-s", default=1.0, type=float, help="Scale of dither, SIZE=1 means d_x=50'', d_y=100''.")
 	p.add_argument("-o", "--outpath", default=op.join(HERE,"outputs/"), help="where you want your output files")
 	p.add_argument("-c", "--srcpath", default=op.join(HERE,"ubercal/"), help="directory containing test-calibration source code")
@@ -450,7 +461,7 @@ if __name__=='__main__':
 
 	# Test this module if verbosity is at debug level (i.e. 2)
 	if arg.verb==2:
-		_test(outv, lim_rec)
+		_test(outv, lim_rec, dithvec/SCALE)
 		plt.title(arg.pattern+'-pattern' + ', dx = '+str(round(dithvec[0],1)) + "'' & dy = "+str(round(dithvec[1],1))+"''")
 		plt.show()	
 
