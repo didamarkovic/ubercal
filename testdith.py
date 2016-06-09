@@ -9,9 +9,10 @@ import os
 import numpy as np
 import time
 from subprocess import call
+import traceback
 
 def get_timestamp():
-	t = (2015,3,1,0,0,0,0,0,0)
+	t = (2016,1,1,0,0,0,0,0,0)
 	return str(int(time.time() - time.mktime(t)))
 
 ################### GLOBALS: ################
@@ -58,10 +59,12 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 		pattern = ["J"]
 		verb = True
 		seed = '-1'
+		if verb: print "Seeting seed to -1, since we re in testing mode."
 	elif mode == 'base':
 		totcals = 1
 		pattern = ["J"]
 		verb = True
+		if verb: print "Seeting seed to -1, since we re in baseline-only mode."
 		seed = '-1'
 	elif mode == 'area':
 		if not nsur: nsur = 2*NX
@@ -113,31 +116,35 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 			call(cmd, stdout=pf, cwd = calipath);
 		except OSError as e:
 			raise Exception('\n\tThe following command failed:\n\t' + ' '.join(cmd) + '\n\tin folder:\n\t' + calipath + '\n\twith the error:\n\t' + str(e))
+		else:
+			if verb: print "Ran " + ' '.join(cmd)
 		cmd = ['./test-calibration', rundir+'/', seed, starfile]
 		try:
 			call(cmd, stdout=cf, cwd = calipath);
 		except OSError as e:
 			raise Exception('\n\tThe following command failed:\n\t' + ' '.join(cmd) + '\n\tin folder:\n\t' + calipath + '\n\twith the error:\n\t' + str(e))
-		
+		else:
+			if verb: print "Ran " + ' '.join(cmd)
 		# Now get the area in patch info
 		line = None
 		with open(os.path.join(rundir, 'baseline_patch.out'), "r") as pf:
 			frac=[]
 			for line in pf: 
 				try:
-					if "exposures over area" in line:
-						frac += [float(line.split(", fraction ")[-1])]
+					if "coverage" in line and "-passes" in line:
+						frac += [float(line.split(" = ")[-1][:-2])/100.0]
 					elif "tot" in line and "area" in line and "=" in line:
 						area = float(line.split("= ")[-1])
 					else:
 						pass
-				except ValueError:
-					raise Exception("This line makes no sense:\n" + line)
+				except ValueError as e:
+					raise Exception("This line makes no sense:\n'" + line[:-1] + "'\n" + str(e))
 		if line==None: raise Exception("File " + rundir + 'baseline_patch.out' + " is empty!") 
 
 		# Now get last line of the file
 		pf.close(); cf.close()
 		cf = open(os.path.join(rundir,'baseline_test.out'), "r")
+		line = None
 		for line in cf: 
 			if verb: pass
 		# The last line should be like: 
@@ -165,7 +172,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 			else:	
 				if not os.path.isdir(patdir): 
 					call(['mkdir',patdir])
-					if verb: print "Created " + os.path.dirname(patdir)
+					if verb: print "Created " + patdir
 
 			# Build up an array of dither strategy multiples
 			# 	it is in arcsec (n.b. one CCD is 2040 pixel = 612", gap about 50", 100")
@@ -206,13 +213,16 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 						
 				# Create directory for this dither size
 				outdir = os.path.join(patdir, 'dithersize-'+str(x1))
-				if not os.path.isdir(outdir): call(['mkdir', outdir+'/'])
+				if not os.path.isdir(outdir): 
+					call(['mkdir', outdir+'/'])
+					if verb: print "Created " + outdir
 				
 				# Create mangle result files
 				skippatch = False
 				patchfile = os.path.join(outdir, 'patch-'+str(x1)+'.out')
 				#if os.path.isfile(patchfile):
 				#	pf = open(patchfile, "r")
+				#	line = None
 				#	for line in pf: pass
 				#	pf.close()
 				#	if "total area =" in line: 
@@ -222,31 +232,50 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 				
 				for nx, ny in surveys:
 
-					if not skippatch:
+					outdira = os.path.join(outdir, str(nx)+'x'+str(ny))
+
+					# The following is another awful hack:
+					if mode!='area' and os.path.isfile(patchfile): 
+						skippatch = True
+						line = None
+						with open(patchfile, "r") as pf:
+							for line in pf: pass
+						if line is None: skippatch = False
+					else:
+						skippatch = False
+
+					if not skippatch and not os.path.isfile(os.path.join(outdira, 'patch-'+str(x1)+'.out')):
+						if verb: print 'No patch file patch-'+str(x1)+'.out found. Creating it now in ' + outdir + '.'
 						# Run Will's code by calling bash
 						pf = open(patchfile, "w")
-						call(['./create-euclid-patch', outdir+'/', str(x1), str(y1), str(x2), str(y2), str(x3), str(y3), str(nx), str(ny)], stdout=pf, cwd = calipath)
+						cmd = ['./create-euclid-patch', outdir+'/', str(x1), str(y1), str(x2), str(y2), str(x3), str(y3), str(nx), str(ny)]
+						if verb: print "In " + calipath + ", run:\n\t" + ' '.join(cmd)
+						call(cmd, stdout=pf, cwd = calipath)
 						pf.close();
+						if verb: print "Ran create-euclid-patch."
+					elif os.path.isfile(os.path.join(outdira, 'patch-'+str(x1)+'.out')):
+						patchfile = os.path.join(outdira, 'patch-'+str(x1)+'.out')
 
 					# Now get the area in patch info
 					line = None
 					with open(patchfile, "r") as pf:
 						frac=[]
-						line = None
 						for line in pf: 
-							if "exposures over area" in line:
-								frac += [float(line.split(", fraction ")[-1])]
-							elif "tot" in line and "area" in line and "=" in line:
-								area = float(line.split("= ")[-1])
-							else:
-								pass
+							try:
+								if "coverage" in line and "-passes" in line:
+									frac += [float(line.split(" = ")[-1][:-2])/100.0]
+								elif "tot" in line and "area" in line and "=" in line:
+									area = float(line.split("= ")[-1])
+								else:
+									pass
+							except ValueError as e:
+								raise Exception("This line makes no sense:\n'" + line[:-1] + "'\n" + str(e))
 					if line==None: raise Exception("File " + patchfile + " is empty!")
 
 					if verb: print "Calibration for a survey with " + str(nx) + "x" + str(ny) + " pointings."
 
-					outdira = os.path.join(outdir, str(nx)+'x'+str(ny))
 					califile = os.path.join(outdir, 'test-'+str(x1)+'.out')		
-					if not os.path.isfile(califile):
+					if not os.path.isfile(califile) and not os.path.isfile(os.path.join(outdira, 'test-'+str(x1)+'.out')):
 
 						if verb: print "No " + califile
 
@@ -254,19 +283,27 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 						cf = open(califile, "w")
 					
 						# Run Will's code by calling bash
-						call(['./test-calibration', outdir+'/', seed, starfile], stdout=cf, cwd = calipath)
+						cmd = ['./test-calibration', outdir+'/', seed, starfile]
+						if verb: print "In " + calipath + ", run:\n\t" + ' '.join(cmd)
+						call(cmd, stdout=cf, cwd = calipath)
 						cf.close();
+						if verb: print "Ran test-calibration"
 						
 						# Now get last line of the file (to get initial and final claibrations)
 						cf = open(califile, "r")
+						line = None
 						for line in cf: pass						
-						if line==None or "calibration" not in line: raise Exception("File " + califile + " is not what I expected! I got this line:\n" + line)
+						if line==None or "calibration" not in line: raise Exception("File " + califile + " is not what I expected! I got this line:\n" + str(line))
 					else:
+						if os.path.isfile(os.path.join(outdira, 'test-'+str(x1)+'.out')):
+							califile = os.path.join(outdira, 'test-'+str(x1)+'.out')
+
 						print "Reading previous result from " + califile
 						cf = open(califile, "r")
+						line = None
 						for line in cf: pass
 
-						if not "final calibration" in line:
+						if line==None or not "final scatter" in line:
 
 							print califile + " not finished."
 
@@ -274,10 +311,13 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 							cf = open(califile, "w")
 						
 							# Run Will's code by calling bash
-							call(['./test-calibration', outdir+'/', seed, starfile], stdout=cf, cwd = calipath)
+							cmd = ['./test-calibration', outdir+'/', seed, starfile]
+							if verb: print "In " + calipath + ", run:\n\t" + ' '.join(cmd)
+							call(cmd, stdout=cf, cwd = calipath)
 							cf.close();
 							
 							cf = open(califile, "r")
+							line = None
 							for line in cf: pass
 							if line==None or "calibration" not in line: raise Exception("File " + califile + " is not what I expected!")
 
@@ -293,13 +333,20 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 						# This will likely be the biggest RAM consumer (but still shouldn't go beyond ~100MB)
 					
 					if mode == 'area':
+						stashprint = False
 						if not os.path.isdir(outdira): call(['mkdir', outdira])
-						if verb: print "Stashing results to: "+outdira	
-						call(['mv', califile, outdira])
-						call(['mv', patchfile, outdira])
-						call(['mv', os.path.join(outdir,"full-survey-overlaps.txt"), outdira])
-						call(['mv', os.path.join(outdir,"full-pointing.pol"), outdira])
-						call(['mv', os.path.join(outdir,"full-pointing.vrt"), outdira])
+						if outdira not in patchfile:
+							stashprint = True
+							call(['mv', patchfile, outdira])
+							call(['mv', os.path.join(outdir,"full-survey-overlaps.txt"), outdira])
+							call(['mv', os.path.join(outdir,"full-survey.vrt"), outdira])
+							call(['mv', os.path.join(outdir,"full-survey-overlaps.vrt"), outdira])
+						if outdira not in califile:	
+							stashprint = True
+							call(['mv', califile, outdira])
+						if verb and stashprint: print "Stashed results to: "+ outdira + '.\n'							
+						# If we go back to creating the patch first, the patch files stay the same for different survey sizes, 
+						#  so they should not be stashed, but reused for speed!
 
 			# Save all calibrations from each pattern into a file (or append if it exists)
 			dither_arr = np.array(dither_arr)
@@ -337,26 +384,25 @@ if __name__=='__main__':
 	parser = argparse.ArgumentParser(description="Calculate self-calibration quality for different dither patterns.")
 	
 	# General options
+	group = parser.add_mutually_exclusive_group()
+	group.add_argument("-m", "--mode", type=str, default='test', help="mode of execution: leave blank for production, 'test' for a simple test, 'base' for only baseline J-pattern, 'nobase' to skip calculating for the baseline, 'area':study variation with survey size (number of pointings) ")
+
+	# Mutually exclusive mode arguments
+	group.add_argument("-t", "--test", action='store_true', default=False, help="mode = 'test'")
 	parser.add_argument("-v", "--verbose", default=False, action="store_true")
 	parser.add_argument("-f", "--carryon", default=False, action="store_true", help="continue a previous run")
-	
-	# Mutually exclusive mode arguments
-	mode_group = parser.add_mutually_exclusive_group()
-	mode_group.add_argument("-m", "--mode", type=str, default='test', help="mode of execution: leave blank for production, 'test' for a simple test, 'base' for only baseline J-pattern, 'nobase' to skip calculating for the baseline, 'area':study variation with survey size (number of pointings) ")
-	mode_group.add_argument("-t", "--test", action='store_true', default=False, help="mode = 'test'")
 	
 	# These should be a non-mutually exclusive group:
 	parser.add_argument("-x", "--xmax", type=float, default=50.0, help="x-displatement of first dither")
 	parser.add_argument("-y", "--ymax", type=float, default=None, help="y-displatement of first dither")
 	parser.add_argument("-p", "--patterns", nargs='+', default=PATTERNS, help="dithering patterns to test: implemented: J, step, S, box")
 	parser.add_argument("-s", "--seed", type=int, default='-'+ts, help="random seed for stellar density")
-	parser.add_argument("-nx", type=int, default=3, help="number of pointings in survey in x-direction (RA)")
-	parser.add_argument("-ny", type=int, default=None, help="number of pointings in survey in y-direction (dec)")
-	
-	# As below, these two should be mutually exclusive for safety. Setting both of them runs, but hasn't been tested.
-	mode_group_2 = parser.add_mutually_exclusive_group()
-	mode_group_2.add_argument("-n", "--nsizes", type=int, default=1, help="number of pattern sizes to run (max set by xmax argument)")
-	mode_group_2.add_argument("-a", "--surveys", type=int, default=None, help="how many survey sizes to test")
+	parser.add_argument("-nx", type=int, default=3, help="number of pointins in survey in x-direction (RA)")
+	parser.add_argument("-ny", type=int, default=None, help="number of pointins in survey in y-direction (dec)")
+
+	# These in principle work together, so don't have to be mutually exclusive
+	parser.add_argument("-a", "--surveys", type=int, default=None, help="how many survey sizes to test")
+	parser.add_argument("-n", "--nsizes", type=int, default=1, help="number of pattern sizes to run (max set by xmax argument)")
 
 	parser.add_argument("-o", "--outpath", default=thispath, help="where you want or have your 'outputs' folder")
 	parser.add_argument("-c", "--calipath", default=thispath+"/bin/", help="directory containing test-calibration binaries")
@@ -364,48 +410,66 @@ if __name__=='__main__':
 
 	# Save the inputs:
 	args = parser.parse_args()
-
+	
 	# Set the missing redundant settings:
 	if not args.surveys == None: 
 		args.mode = 'area'
 	elif (args.nsizes or args.xmax or args.ymax or args.patterns or args.seed) and args.mode=='test':
 		args.mode = 'producion'	
 	
-	# As above, these two should be mutually exclusive for safety. Setting both of them runs, but hasn't been tested.
-	if args.nsizes > 1 and args.mode=='area': raise Exception("argument -n/--nsizes not allowed in area mode")
-
 	# Make directory structure for outputs for this run
-	rundir = os.path.join(args.outpath, 'outputs/', str(abs(args.seed)))
-	if not os.path.isdir(os.path.join(args.outpath,'outputs')):
+	makedir = False
+
+	# Check if given outputs directory or parent
+	if 'outputs' != os.path.basename(os.path.normpath(args.outpath)):
+		rundir = os.path.abspath(os.path.join(args.outpath, 'outputs/', str(abs(args.seed))))
+	else:
+		rundir = os.path.abspath(os.path.join(args.outpath, str(abs(args.seed))))
+	
+	# Create missing outputs directory if needed as well as one for hte given seed from the timestamp
+	if not os.path.isdir(os.path.dirname(rundir)):
 		call(['mkdir', os.path.dirname(rundir)])
 		call(['mkdir', rundir])
-		print "Created " + os.path.dirname(rundir)
-	# If the given seed has no directory, create one from the timestamp
+		if args.verbose: print "Created " + os.path.dirname(rundir) + " and in it " + os.path.basename(rundir) + "."
+		makedir = True
+
+	# If only the given seed has no directory, create one from the timestamp
 	elif not os.path.isdir(rundir):
 		call(['mkdir', rundir])
-		if args.verbose: print "Created " + os.path.dirname(rundir)
-			
+		if args.verbose: print "Created " + rundir
+		makedir = True
+
 	# Save the configuration explicitly (no INTERRUPTED at end):
 	config_file = config_file(args.patterns)
-	f = open(os.path.join(rundir, config_file),'w')
 	if args.carryon: 
-		print "... CONTINUING INTERRUPTED RUN " + str(args.seed) + "."
-		f.write("# This run was interrupted and restarted.\n")
+		f = open(os.path.join(rundir, config_file),'a')
+		if not makedir:
+			print "... CONTINUING INTERRUPTED RUN " + str(args.seed) + "."
+			f.write("\n\n... CONTINUE THE RUN\n# This run was restarted.\n")
+		else:
+			print "You say I should CONTINUE AND INTERRUPTED RUN, but there is no evidence of any previous results from seed 3002!"
+			print "\t => starting from scratch."
+	else:
+		f = open(os.path.join(rundir, config_file),'w')
+	
 	f.write("# Run " + ts + " has configuration:\n")
 	for arg, value in sorted(vars(args).items()):
 		f.write(str(arg) + '=' + str(value) + '\n')
 	
 	# Now run:
+	exitcode=0
 	try:
 		[ts, fn] = test_dithers(dx=args.xmax,pattern=args.patterns, NX = args.nx, NY = args.ny, 
 			nsur = args.surveys, totcals=args.nsizes, \
 			mode=args.mode, seed=str(args.seed), dy=args.ymax, 
-			verb=args.verbose, rundir=rundir, calipath=args.calipath, starfile=args.starpath, cont=args.carryon)
-	except Exception as e:
-		f.write("...INTERRUPTED")
-		print "RUN WAS INTERRUPTED... (saved to " + config_file + ")."
-		raise
+			verb=args.verbose, rundir=rundir, calipath=os.path.abspath(args.calipath), starfile=os.path.abspath(args.starpath), cont=args.carryon)
+	except:
+		tb = traceback.format_exc()
+		f.write("\n...INTERRUPTED due to:\n" + tb)
+		print "RUN WAS INTERRUPTED... Config and traceback saved to " + os.path.join(rundir, config_file) + ".\n\t" + tb.splitlines()[-1]
+		exitcode=1
+	else:
+		print "Run " + ts + " is finished, configuration saved to " + config_file + ", log in " + os.path.basename(fn) + "."
 	finally:
 		f.close()
-
-	print "Run " + ts + " is finished, configuration saved to " + config_file + "."
+		exit(exitcode)

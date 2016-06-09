@@ -40,6 +40,7 @@ void powell(double[],double**,int,double,int*,double*,double (*func)(double []))
 float gasdev(long*);
 float poidev(float,long*);
 double **dmatrix(int,int,int,int);
+void free_dmatrix(double **m, long nrl, long nrh, long ncl, long nch);
 
 // function to calculate chi^2
 double calc_chisq(double*);
@@ -198,6 +199,7 @@ int main(int argc, char *argv[]) {
   double endval=0.0;
   int itmp;
   powell(new_calib,xi,nexposure,1.0e-3,&itmp,&endval,calc_chisq);
+  free_dmatrix(xi,1,nexposure,1,nexposure);
 
   // ********************************************************************************
   // now test post-ubercal calibrations - these are the initial calibrations
