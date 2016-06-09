@@ -10,6 +10,7 @@ import numpy as np
 import time
 from subprocess import call
 import traceback
+import ubercal
 
 def get_timestamp():
 	t = (2016,1,1,0,0,0,0,0,0)
@@ -79,9 +80,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 		surveys = zip(arrsteps_x,arrsteps_y) 
 
 	# Compile first, before looping 
-	#call(['make','clean'], cwd = calipath)
-	#call(['make','create-euclid-patch'], cwd = calipath)
-	#call(['make','test-calibration'], cwd = calipath)
+	#ubercal.compile(calipath)
 
 	# Check if have dy
 	if not dy: dy = 2.0*dx
@@ -102,62 +101,20 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 		if verb: print "Getting the baseline..."
 
-		bl = [50.0,100.0,0.0,100.0,0.0,100.0]
-		r = np.sqrt((bl[0]+bl[2]+bl[4])**2 + (bl[1]+bl[3]+bl[5])**2)
-		d = np.sqrt(bl[0]**2 + bl[1]**2) + np.sqrt(bl[2]**2 + bl[3]**2) + np.sqrt(bl[4]**2 + bl[5]**2)
-				
-		# Open baseline log files
-		pf = open(os.path.join(rundir, 'baseline_patch.out'), "w")
-		cf = open(os.path.join(rundir, 'baseline_test.out'), "w")
-			
-		# Run Will's code with default dithers
-		cmd = ['./create-euclid-patch', rundir+'/', str(bl[0]), str(bl[1]), str(bl[2]), str(bl[3]), str(bl[4]), str(bl[5]), str(NX), str(NY)]
-		try:
-			call(cmd, stdout=pf, cwd = calipath);
-		except OSError as e:
-			raise Exception('\n\tThe following command failed:\n\t' + ' '.join(cmd) + '\n\tin folder:\n\t' + calipath + '\n\twith the error:\n\t' + str(e))
-		else:
-			if verb: print "Ran " + ' '.join(cmd)
-		cmd = ['./test-calibration', rundir+'/', seed, starfile]
-		try:
-			call(cmd, stdout=cf, cwd = calipath);
-		except OSError as e:
-			raise Exception('\n\tThe following command failed:\n\t' + ' '.join(cmd) + '\n\tin folder:\n\t' + calipath + '\n\twith the error:\n\t' + str(e))
-		else:
-			if verb: print "Ran " + ' '.join(cmd)
-		# Now get the area in patch info
-		line = None
-		with open(os.path.join(rundir, 'baseline_patch.out'), "r") as pf:
-			frac=[]
-			for line in pf: 
-				try:
-					if "coverage" in line and "-passes" in line:
-						frac += [float(line.split(" = ")[-1][:-2])/100.0]
-					elif "tot" in line and "area" in line and "=" in line:
-						area = float(line.split("= ")[-1])
-					else:
-						pass
-				except ValueError as e:
-					raise Exception("This line makes no sense:\n'" + line[:-1] + "'\n" + str(e))
-		if line==None: raise Exception("File " + rundir + 'baseline_patch.out' + " is empty!") 
+		bl = ubercal.dith.BASELINE
+		r, d = ubercal.dith.totaldither(bl)
 
-		# Now get last line of the file
-		pf.close(); cf.close()
-		cf = open(os.path.join(rundir,'baseline_test.out'), "r")
-		line = None
-		for line in cf: 
-			if verb: pass
-		# The last line should be like: 
-		#	"Initial calibration ical[i], final calibration fcal[i]"
-		if line==None or "calibration" not in line: raise Exception("File " + rundir + 'baseline_test.out' + " is not what I expected!")
-		icalb = float(line.split(", ")[0].split(" ")[2]) 
-		fcalb = float(line.split(", ")[1].split(" ")[2])
-		cf.close()
+		### Run Will's code to create the baseline survey with default dithers
+		area, frac = ubercal.dith.create_surveypatch(bl, NX, NY, calipath, rundir, os.path.join(rundir, 'baseline_patch.out'), verb)
 
+		### Run Will's code to test the ubercalibration using the baseline survey
+		icalb, fcalb = ubercal.test_calibration(starfile, seed, calipath, rundir, os.path.join(rundir, 'baseline_test.out'), verb)
+
+		# Save the above into the baseline output file
 		row = [0, d, area] + [icalb,fcalb] + list(bl) + [NX, NY] + frac
 		np.savetxt(fname, np.array(row)[None], fmt='%.6f', delimiter=' ', newline='\n', header="J-pattern: baseline" + filehead)
 
-		if verb: print "Baseline saved to " + fname
+		if verb: print "Baseline saved to " + fname + '.'
 
 	if mode != 'base':
 		# Then loop over patterns
@@ -175,21 +132,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 					if verb: print "Created " + patdir
 
 			# Build up an array of dither strategy multiples
-			# 	it is in arcsec (n.b. one CCD is 2040 pixel = 612", gap about 50", 100")
-			if pattern[p]=="J":
-				end_dithers = np.array([[dx,dy],[0.0,dy],[0.0,dy]])
-			elif pattern[p]=="box":
-				end_dithers = np.array([[dx,0.0],[0.0,dy],[-dx,0.0]])
-			elif pattern[p]=="step":
-				end_dithers = np.array([[dx,dy],[dx,0.0],[dx,0.0]])
-			elif pattern[p]=="S":
-				end_dithers = np.array([[dx,dy],[0.0,dy],[dx,dy]])
-			elif pattern[p]=="X":
-				end_dithers = np.array([[dx,dy],[0.0,0.0],[-dx,-dy]])
-			elif pattern[p]=="N":
-				end_dithers = np.array([[dx,dy],[dx,0.0],[dx,dy]])
-			else:
-				raise RuntimeError("You did not tell me what the " + pattern[p]+ "-pattern is!\n")
+			end_dithers = ubercal.dith.getpat(pattern[p], dx, dy)
 			
 			# Now loop over multiples of dither strategy: 
 			# 	resulting calibration gets saved into a file each time => read into array
@@ -200,26 +143,18 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 				new_dithers = np.array(end_dithers)
 				if totcals != 1:
 					new_dithers = np.array(end_dithers)*float(i)/(totcals-1)
-				x1 = new_dithers[0,0]
-				y1 = new_dithers[0,1]
-				x2 = new_dithers[1,0]
-				y2 = new_dithers[1,1]
-				x3 = new_dithers[2,0]
-				y3 = new_dithers[2,1]
-				# Calculate the vector magnitude of 4th dither displacement from 1st
-				r = np.sqrt((x1+x2+x3)**2 + (y1+y2+y3)**2)
-				# Calculate full distance travelled by telescope (in pix)
-				d = np.sqrt(x1**2 + y1**2) + np.sqrt(x2**2 + y2**2) + np.sqrt(x3**2 + y3**2)
-						
+
+				r, d = ubercal.dith.totaldither(new_dithers.flatten())
+
 				# Create directory for this dither size
-				outdir = os.path.join(patdir, 'dithersize-'+str(x1))
+				outdir = os.path.join(patdir, 'dithersize-'+str(new_dithers[0,0]))
 				if not os.path.isdir(outdir): 
 					call(['mkdir', outdir+'/'])
 					if verb: print "Created " + outdir
 				
 				# Create mangle result files
 				skippatch = False
-				patchfile = os.path.join(outdir, 'patch-'+str(x1)+'.out')
+				patchfile = os.path.join(outdir, 'patch-'+str(new_dithers[0,0])+'.out')
 				#if os.path.isfile(patchfile):
 				#	pf = open(patchfile, "r")
 				#	line = None
@@ -234,6 +169,8 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 					outdira = os.path.join(outdir, str(nx)+'x'+str(ny))
 
+					### Construct this survey
+
 					# The following is another awful hack:
 					if mode!='area' and os.path.isfile(patchfile): 
 						skippatch = True
@@ -244,93 +181,49 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 					else:
 						skippatch = False
 
-					if not skippatch and not os.path.isfile(os.path.join(outdira, 'patch-'+str(x1)+'.out')):
-						if verb: print 'No patch file patch-'+str(x1)+'.out found. Creating it now in ' + outdir + '.'
-						# Run Will's code by calling bash
-						pf = open(patchfile, "w")
-						cmd = ['./create-euclid-patch', outdir+'/', str(x1), str(y1), str(x2), str(y2), str(x3), str(y3), str(nx), str(ny)]
-						if verb: print "In " + calipath + ", run:\n\t" + ' '.join(cmd)
-						call(cmd, stdout=pf, cwd = calipath)
-						pf.close();
-						if verb: print "Ran create-euclid-patch."
-					elif os.path.isfile(os.path.join(outdira, 'patch-'+str(x1)+'.out')):
-						patchfile = os.path.join(outdira, 'patch-'+str(x1)+'.out')
+					if not skippatch and not os.path.isfile(os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')):
+						
+						if verb: print 'No patch file patch-'+str(new_dithers[0,0])+'.out found. Creating it now in ' + outdir + '.'
+						
+						# Run Will's code to create the survey files
+						area, frac = ubercal.dith.create_surveypatch(new_dithers.flatten(), nx, ny, calipath, outdir, patchfile, verb)
 
-					# Now get the area in patch info
-					line = None
-					with open(patchfile, "r") as pf:
-						frac=[]
-						for line in pf: 
-							try:
-								if "coverage" in line and "-passes" in line:
-									frac += [float(line.split(" = ")[-1][:-2])/100.0]
-								elif "tot" in line and "area" in line and "=" in line:
-									area = float(line.split("= ")[-1])
-								else:
-									pass
-							except ValueError as e:
-								raise Exception("This line makes no sense:\n'" + line[:-1] + "'\n" + str(e))
-					if line==None: raise Exception("File " + patchfile + " is empty!")
+					elif os.path.isfile(os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')):
+						
+						patchfile = os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')
+
+						area, frac = ubercal.dith.get_area(patchfile, verb)
+
+
+					### Test calibration
 
 					if verb: print "Calibration for a survey with " + str(nx) + "x" + str(ny) + " pointings."
 
-					califile = os.path.join(outdir, 'test-'+str(x1)+'.out')		
-					if not os.path.isfile(califile) and not os.path.isfile(os.path.join(outdira, 'test-'+str(x1)+'.out')):
+					califile = os.path.join(outdir, 'test-'+str(new_dithers[0,0])+'.out')		
+					
+					if not os.path.isfile(califile) and not os.path.isfile(os.path.join(outdira, 'test-'+str(new_dithers[0,0])+'.out')):
 
 						if verb: print "No " + califile
 
-						# Create mangle result files
-						cf = open(califile, "w")
-					
-						# Run Will's code by calling bash
-						cmd = ['./test-calibration', outdir+'/', seed, starfile]
-						if verb: print "In " + calipath + ", run:\n\t" + ' '.join(cmd)
-						call(cmd, stdout=cf, cwd = calipath)
-						cf.close();
-						if verb: print "Ran test-calibration"
-						
-						# Now get last line of the file (to get initial and final claibrations)
-						cf = open(califile, "r")
-						line = None
-						for line in cf: pass						
-						if line==None or "calibration" not in line: raise Exception("File " + califile + " is not what I expected! I got this line:\n" + str(line))
+						ical, fcal = ubercal.test_calibration(starfile, seed, calipath, outdir, califile, verb)
+										
 					else:
-						if os.path.isfile(os.path.join(outdira, 'test-'+str(x1)+'.out')):
-							califile = os.path.join(outdira, 'test-'+str(x1)+'.out')
+						
+						if os.path.isfile(os.path.join(outdira, 'test-'+str(new_dithers[0,0])+'.out')):
+							califile = os.path.join(outdira, 'test-'+str(new_dithers[0,0])+'.out')
 
 						print "Reading previous result from " + califile
-						cf = open(califile, "r")
-						line = None
-						for line in cf: pass
 
-						if line==None or not "final scatter" in line:
+						ical, fcal = ubercal.get_cals(califile, True, verb)
 
-							print califile + " not finished."
-
-							# Create mangle result files
-							cf = open(califile, "w")
-						
-							# Run Will's code by calling bash
-							cmd = ['./test-calibration', outdir+'/', seed, starfile]
-							if verb: print "In " + calipath + ", run:\n\t" + ' '.join(cmd)
-							call(cmd, stdout=cf, cwd = calipath)
-							cf.close();
-							
-							cf = open(califile, "r")
-							line = None
-							for line in cf: pass
-							if line==None or "calibration" not in line: raise Exception("File " + califile + " is not what I expected!")
-
-					# The last line should be like: 
-					#	"Initial calibration ical[i], final calibration fcal[i]"
-					ical = float(line.split(", ")[0].split(" ")[2]) 
-					fcal = float(line.split(", ")[1].split(" ")[2])
-					cf.close()
+						# If the file is unfinished, run test-calibration again
+						if ical is None or fcal is None:
+							ical, fcal = ubercal.test_calibration(starfile, seed, calipath, outdir, califile, verb)
 
 					# Append results of this dither size the result array
 					row = [int(i), d, area] + [ical,fcal] + list(np.hstack(new_dithers)) + [nx, ny] + frac
 					dither_arr.append(row)
-						# This will likely be the biggest RAM consumer (but still shouldn't go beyond ~100MB)
+					# This will likely be the biggest RAM consumer (but still shouldn't go beyond ~100MB)
 					
 					if mode == 'area':
 						stashprint = False
