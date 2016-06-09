@@ -99,7 +99,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 	fname = os.path.join(rundir, 'baseline.dat')
 	if (mode != 'test' or mode is not 'nobase') and not os.path.isfile(fname):
 
-		if verb: print "Getting the baseline..."
+		if verb: print "\n--------- Getting the baseline... --------"
 
 		bl = ubercal.dith.BASELINE
 		r, d = ubercal.dith.totaldither(bl)
@@ -120,7 +120,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 		# Then loop over patterns
 		for p in range(len(pattern)):
 
-			if verb: print "Doing the " + pattern[p] + "-pattern now."
+			if verb: print "\n--------- Doing the " + pattern[p] + "-pattern now. --------"
 
 			# Save the directory for this pattern in the run directory
 			patdir = os.path.join(rundir,pattern[p])
@@ -183,7 +183,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 					if not skippatch and not os.path.isfile(os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')):
 						
-						if verb: print 'No patch file patch-'+str(new_dithers[0,0])+'.out found. Creating it now in ' + outdir + '.'
+						if verb: print '\n-- No patch file patch-'+str(new_dithers[0,0])+'.out found. Creating it now in ' + outdir + '.'
 						
 						# Run Will's code to create the survey files
 						area, frac = ubercal.dith.create_surveypatch(new_dithers.flatten(), nx, ny, calipath, outdir, patchfile, verb)
@@ -193,7 +193,6 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 						patchfile = os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')
 
 						area, frac = ubercal.dith.get_area(patchfile, verb)
-
 
 					### Test calibration
 
@@ -263,6 +262,9 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 	
 	if mode is 'test': outtext.extend(['This was a run in test mode.'])
 	if mode is 'base': outtext = ['Run took ' + duration + ' seconds for baseline dither config.']
+
+	outtext.extend(str(ubercal.io.GitEnv()).split('\n'))
+
 	np.savetxt(os.path.join(rundir, final_file), outtext, fmt='# %s')
 	
 	print outtext[0]

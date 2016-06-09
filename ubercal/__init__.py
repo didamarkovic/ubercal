@@ -3,7 +3,7 @@
 	09/06/2016 KMarkovic
 """
 from subprocess import call
-import dith
+import dith, io
 
 def test_calibration(starfile, seed=-1, calipath='./', outdir='./', outfile='./test-calibration.out', verb=False):
 	""" Runs test-calibration.c to simulate a normally distributed set of calibrations 
