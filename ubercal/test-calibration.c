@@ -46,7 +46,8 @@ void free_dmatrix(double **m, long nrl, long nrh, long ncl, long nch);
 double calc_chisq(double*);
 
 // some global variables that save effort
-const double SIG_INIT = 0.04;                // 4% initial calibration
+const double SIG_INIT = 0.16;                // 4% initial exposure calibration (16% detector)
+const double SIG_FINAL = 0.0;                // 1% expected final calibration
 long nexposure, noverlap;
 
 // buffer size
@@ -183,7 +184,7 @@ int main(int argc, char *argv[]) {
     }
     // variance of distribution of measured fluxes around mean
     // the (N-1)/N factor allows for decreased scatter around measured mean - decided this should not be used here
-    p_overlap[i].ssq_calib = sigma*sigma+SIG_INIT*SIG_INIT;
+    p_overlap[i].ssq_calib = sigma*sigma+SIG_FINAL*SIG_FINAL;
   }
 
   // exit(0);
