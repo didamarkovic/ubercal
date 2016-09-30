@@ -14,6 +14,7 @@ Send an email to Dida Markovic (dida.markovic@port.ac.uk)
 #include <string.h>
 
 const int VERB = 0;
+FILE *FLIKE;
 
 struct overlap_large {
   double area;             // area of overlap
@@ -47,7 +48,7 @@ double calc_chisq(double*);
 
 // some global variables that save effort
 const double SIG_INIT = 0.16;                // 4% initial exposure calibration (16% detector)
-const double SIG_FINAL = 0.0;                // 1% expected final calibration
+const double SIG_FINAL = 0.0;                // 0% expected final calibration (?)
 long nexposure, noverlap;
 
 // buffer size
@@ -149,10 +150,6 @@ int main(int argc, char *argv[]) {
   // their intrinsic measurement noise
   double old_calib[nexposure+1], new_calib[nexposure+1];
   for(int i=1;i<=nexposure;i++) old_calib[i] = SIG_INIT*gasdev(&seed);
-
-  // slightly faster if you start with new_calib as the perfect answer (=-old_calib[i])
-  // but this doesn't seem fair!
-  for(int i=1;i<=nexposure;i++) new_calib[i]=0.0;
   
   // ********************************************************************************
   // set up mock flux measurements for each exposure of calibrators in overlaps
@@ -192,6 +189,21 @@ int main(int argc, char *argv[]) {
   // ********************************************************************************
   // perform minimisation
 
+  // slightly faster if you start with new_calib as the perfect answer (=-old_calib[i])
+  // but this doesn't seem fair!
+  for(int i=1;i<=nexposure;i++) new_calib[i]=0.0;
+
+  // open file to write the minimisation steps
+  if(VERB>1){
+    strcpy(fname, fpath);
+    strcat(fname,"likelihoods.txt");
+    if((FLIKE=fopen(fname,"w"))==NULL) {
+      strcat(fname, " <- c-e-p cannot open output file");
+      err_known(fname);
+    }
+    fprintf(FLIKE,"# last line would be perfect, last two columns are the total chisq and the 'prior'\n");
+  }
+
   // internal parameters required by powell
   double **xi = dmatrix(1,nexposure,1,nexposure);
   for(int i=1;i<=nexposure;i++)
@@ -199,8 +211,36 @@ int main(int argc, char *argv[]) {
       xi[i][j]=(i==j?0.1*SIG_INIT:0.0);
   double endval=0.0;
   int itmp;
+
+  // minimisation
   powell(new_calib,xi,nexposure,1.0e-3,&itmp,&endval,calc_chisq);
   free_dmatrix(xi,1,nexposure,1,nexposure);
+  if (VERB>0) printf("After %i iterations, the final chi^2 = %g.\n", itmp, endval);
+
+  // print truth and close file
+  if(VERB>1){
+    for(int i=1;i<=nexposure;i++) fprintf(FLIKE," %+1.3f", -old_calib[i]);
+    fprintf(FLIKE," 0.0 0.0\n");
+    fprintf(FLIKE,"\n");
+    fclose(FLIKE);
+  }
+
+  // ********************************************************************************
+  // write the results of the minimisation to a file
+  FILE *fout;
+  strcpy(fname, fpath);
+  strcat(fname,"calibrations.txt");
+  if((fout=fopen(fname,"w"))==NULL) {
+    strcat(fname, " <- c-e-p cannot open output file");
+    err_known(fname);
+    }
+  fprintf(fout,"# %f initial scatter\n", SIG_INIT);
+  fprintf(fout,"# exposure-id initial-zero-point calibration-correction calibrated-zero-point\n");
+  for(int i=1;i<=nexposure;i++){
+      fprintf(fout,"%i %g %g %g\n", i, old_calib[i], new_calib[i], old_calib[i]+new_calib[i]);
+  }
+  fprintf(fout,"\n");
+  fclose(fout);
 
   // ********************************************************************************
   // now test post-ubercal calibrations - these are the initial calibrations
@@ -220,13 +260,25 @@ int main(int argc, char *argv[]) {
   mean_init  /= (double)nexposure;
   mean_final /= (double)nexposure;
   mean_cal /= (double)nexposure;
+  if(VERB>0) printf("Improvement due to Ubercal, q = %g and\n", sqrt(sigmasq_init/sigmasq_final)); 
+  sigmasq_init  = sigmasq_init/(double)nexposure;
+  sigmasq_final = sigmasq_final/(double)nexposure;
+  sigmasq_cal = sigmasq_cal/(double)nexposure;
+
+  // Now calculate the true covariance between the true initial zero-points and the calibrations
+  if(VERB>0){
+    double cov_init_cal_diag=0.0;
+    for(int i=1;i<=nexposure;i++) {
+      cov_init_cal_diag += (new_calib[i]-mean_cal)*(old_calib[i]-mean_init)/(double)nexposure;
+    }
+    printf("True correlation between the true zero-point and the final calibration correction = %g\n",
+     cov_init_cal_diag/sqrt((sigmasq_cal-mean_cal*mean_cal)*(sigmasq_init-mean_init*mean_init)));
+  }
 
   if(VERB>0) printf("Initial 0-point %g, final 0-point %g, calibrated by %g\n", mean_init, mean_final, mean_cal);
 
   printf("Initial scatter %g, final scatter %g, calibration scatter %g\n",
-   sqrt(sigmasq_init/(double)nexposure),
-   sqrt(sigmasq_final/(double)nexposure),
-   sqrt(sigmasq_cal/(double)nexposure));
+   sqrt(sigmasq_init), sqrt(sigmasq_final), sqrt(sigmasq_cal));
 
   exit(0);
 }
@@ -234,14 +286,18 @@ int main(int argc, char *argv[]) {
 // this is the main function calculating chi^2
 double calc_chisq(double *new_calib) {
 
-  if(VERB>2) printf("\n--- NEW ITERATION ---\n");
+  if(VERB>2) printf("\n--- NEW ITERATION ---\n"); // diagnostics
 
   // this is the prior - we only expect calibrations of order the initial ones
-  double chisq=0.0;
-  for(int i=1;i<=nexposure;i++) chisq += new_calib[i]*new_calib[i];
+  double chisq0=0.0, chisq=0.0;
+  for(int i=1;i<=nexposure;i++){
+    chisq += new_calib[i]*new_calib[i];
+    if(VERB>1) fprintf(FLIKE," %+1.3f", new_calib[i]); // diagnostics
+  }
   chisq /= (SIG_INIT*SIG_INIT);
+  if(VERB>1) chisq0 = chisq; // diagnostics
 
-  if(VERB>2) printf("\tchisq_0 = %g\n", chisq);
+  if(VERB>2) printf("\tchisq_0 = %g\n", chisq); // diagnostics
 
   // this holds the new flux measurements for each calibrator in each overlap
   double *new_flux = malloc(EMAX*sizeof(double));
@@ -259,7 +315,7 @@ double calc_chisq(double *new_calib) {
         mean += new_flux[ie];
       }
       mean /= (double)p_overlap[i].nexposure;
-      if(VERB>2) printf("\tmean in overlap %d = %g\n", i, mean);
+      if(VERB>2) printf("\tmean in overlap %d = %g\n", i, mean); // diagnostics
       
       // add to chi^2 for this overlap region from differences with mean
       // relies on ssq.calib being variance of exposure calibration measurements
@@ -272,11 +328,13 @@ double calc_chisq(double *new_calib) {
     }
   free(new_flux);
 
-  if(VERB>2) {
-    printf("\tchisq_tot = %g at sig_i = %g and f_cal = ", chisq, SIG_INIT);
-    for(int i=1; i<=nexposure;i++) printf(" [%d:] %g", i, new_calib[i]);
-    printf("\n");
+  // diagnostics
+  if(VERB>1) {
+    fprintf(FLIKE," %1.2e", chisq);
+    fprintf(FLIKE," %1.2e", chisq0);
+    fprintf(FLIKE,"\n");
   }
+  if(VERB>2) printf("\tchisq_tot = %g at sig_i = %g\n", chisq, SIG_INIT);
 
   return chisq;
 }
