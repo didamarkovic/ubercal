@@ -253,14 +253,11 @@ double calc_chisq(double *new_calib) {
         new_flux[ie] = p_overlap[i].flux_calib[ie]+new_calib[p_overlap[i].iexposure[ie]+1];
       
       // mean flux in each overlap//
-      double mean=0.0;//
-      double weight_norm = 0.0;
+      double mean=0.0;
       for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
-        mean += new_flux[ie]/p_overlap[i].ssq_calib;//p_overlap[i].ssq_calib;//
-        weight_norm += 1.0/p_overlap[i].ssq_calib;//p_overlap[i].ssq_calib;
+        mean += new_flux[ie];
       }
-      //mean /= (double)p_overlap[i].nexposure;
-      mean /= weight_norm;
+      mean /= (double)p_overlap[i].nexposure;
       if(VERB>2) printf("\tmean in overlap %d = %g\n", i, mean);
       
       // add to chi^2 for this overlap region from differences with mean
