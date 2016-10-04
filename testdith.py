@@ -26,7 +26,10 @@ final_file = 'run.log'
 #config_file = 'config.ini'
 
 # Get timestamp for this run
-ts = get_timestamp()	
+ts = get_timestamp()
+
+# Default patterns to test
+PATTERNS = ["J", "S"]	
 
 ###############################################
 
@@ -78,9 +81,6 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 		else:
 			arrsteps_y = np.arange(nsur)  + NY - int(nsur/2)
 		surveys = zip(arrsteps_x,arrsteps_y) 
-
-	# Compile first, before looping 
-	#ubercal.compile(calipath)
 
 	# Check if have dy
 	if not dy: dy = 2.0*dx
@@ -167,7 +167,10 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 				
 				for nx, ny in surveys:
 
-					outdira = os.path.join(outdir, str(nx)+'x'+str(ny))
+					if mode == 'area':
+						outdira = os.path.join(outdir, str(nx)+'x'+str(ny))
+					else:
+						outdira = outdir
 
 					### Construct this survey
 
@@ -302,6 +305,8 @@ if __name__=='__main__':
 	parser.add_argument("-o", "--outpath", default=thispath, help="where you want or have your 'outputs' folder")
 	parser.add_argument("-c", "--calipath", default=thispath+"/bin/", help="directory containing test-calibration binaries")
 	parser.add_argument("-st", "--starpath", default=thispath+'/samples/stars.dat', help="file containing a table of stellar populations, densities and their SNR")
+	
+	parser.add_argument("-l", "--compile", default=None, help="compile the C-code before running - input the source code folder")
 
 	# Save the inputs:
 	args = parser.parse_args()
@@ -311,6 +316,9 @@ if __name__=='__main__':
 		args.mode = 'area'
 	elif (args.nsizes or args.xmax or args.ymax or args.patterns or args.seed) and args.mode=='test':
 		args.mode = 'producion'	
+
+	# Compile first, before looping 
+	if args.compile: ubercal.compile(os.path.abspath(args.compile))
 	
 	# Make directory structure for outputs for this run
 	makedir = False
@@ -342,7 +350,7 @@ if __name__=='__main__':
 			print "... CONTINUING INTERRUPTED RUN " + str(args.seed) + "."
 			f.write("\n\n... CONTINUE THE RUN\n# This run was restarted.\n")
 		else:
-			print "You say I should CONTINUE AND INTERRUPTED RUN, but there is no evidence of any previous results from seed 3002!"
+			print "You say I should CONTINUE AN INTERRUPTED RUN, but there is no evidence of any previous results from seed " + str(args.seed) + "!"
 			print "\t => starting from scratch."
 	else:
 		f = open(os.path.join(rundir, config_file),'w')

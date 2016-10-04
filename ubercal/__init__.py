@@ -58,10 +58,10 @@ def get_cals(outfile, may_be_unfinished=False, verb=False):
 	#	"Initial calibration ical[i], final calibration fcal[i]"
 	if line==None or not "final scatter" in line:
 		if may_be_unfinished:
-			print califile + " not finished."
+			print outfile + " not finished."
 			return None, None
 		else:
-			raise Exception("File " + califile + " is not what I expected! I got this line:\n" + str(line))
+			raise Exception("File " + outfile + " is not what I expected! I got this line:\n" + str(line))
 
 	# If all is as expected, extract the calibration values
 	ical = float(line.split(", ")[0].split(" ")[2]) 
