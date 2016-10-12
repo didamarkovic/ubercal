@@ -180,8 +180,8 @@ int main(int argc, char *argv[]) {
       if(VERB>2) printf("The %g stars contribute to the f_meas = %g.\n", nstar_tot, p_overlap[i].flux_calib[ie]);
     }
     // variance of distribution of measured fluxes around mean
-    // the (N-1)/N factor allows for decreased scatter around measured mean - decided this should not be used here
-    p_overlap[i].ssq_calib = sigma*sigma+SIG_FINAL*SIG_FINAL;
+    // the (N-1)/N factor allows for decreased scatter around measured mean
+    p_overlap[i].ssq_calib = (sigma*sigma+SIG_FINAL*SIG_FINAL) * (1-p_overlap[i].nexposure)/p_overlap[i].nexposure;
   }
 
   // exit(0);
