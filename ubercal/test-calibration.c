@@ -70,17 +70,16 @@ int main(int argc, char *argv[]) {
   if (argc > 1){
     sscanf(argv[1], "%s", fpath);
     sscanf(argv[2], "%ld", &seed);
-    if(VERB>0) printf("random seed = %ld\n",seed);
   } else {
     sscanf("./", "%s", fpath);
   }
-  if(VERB>0) printf("Results in %s.\n",fpath);
   if (argc > 3) {
     sscanf(argv[3], "%s", fstar); 
   } else {
     sscanf("./stars.dat", "%s", fstar);
   }
-  if(VERB>0) printf("Stars in %s.\n",fstar);
+  if(VERB>1) printf("Results in %s.\n",fpath);
+  if(VERB>0) printf("random seed = %ld\nStars in %s.\n",seed,fstar);
   fflush(stdout);  
 
   // ********************************************************************************
@@ -269,8 +268,9 @@ int main(int argc, char *argv[]) {
   if(VERB>0){
     double cov_init_cal_diag=0.0;
     for(int i=1;i<=nexposure;i++) {
-      cov_init_cal_diag += (new_calib[i]-mean_cal)*(old_calib[i]-mean_init)/(double)nexposure;
+      cov_init_cal_diag += (new_calib[i]-mean_cal)*(old_calib[i]-mean_init);
     }
+    cov_init_cal_diag/=(double)nexposure;
     printf("True correlation between the true zero-point and the final calibration correction = %g\n",
      cov_init_cal_diag/sqrt((sigmasq_cal-mean_cal*mean_cal)*(sigmasq_init-mean_init*mean_init)));
   }
