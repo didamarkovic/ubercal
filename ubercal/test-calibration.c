@@ -301,7 +301,7 @@ double calc_chisq(double *new_calib) {
 
   // this holds the new flux measurements for each calibrator in each overlap
   double *new_flux = malloc(EMAX*sizeof(double));
-  
+
   // this is the big loop over overlaps - matching fluxes in each is ubercal!
   for(int i=0;i<noverlap;i++) if(p_overlap[i].nexposure>1) {
 
@@ -318,11 +318,21 @@ double calc_chisq(double *new_calib) {
       if(VERB>2) printf("\tmean in overlap %d = %g\n", i, mean); // diagnostics
       
       // add to chi^2 for this overlap region from differences with mean
-      // relies on ssq.calib being variance of exposure calibration measurements
-      // around mean
-      for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
-        double diff = new_flux[ie]-mean;
-        chisq += diff*diff / p_overlap[i].ssq_calib;
+      // relies on ssq.calib being covariance of exposure calibration measurements
+      // around their sample mean
+      for(int je=0;je<p_overlap[i].nexposure;je++) { 
+        double diff_j = new_flux[je]-mean;
+
+        for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
+
+          // covariance, which becomes variance*Bessel factor for ie=je
+          double cov_ieje = -p_overlap[i].ssq_calib/p_overlap[i].nexposure;
+          if(ie==je) cov_ieje += p_overlap[i].ssq_calib;
+
+          double diff_i = new_flux[ie]-mean;
+          chisq += diff_i*diff_j / cov_ieje;
+        }
+
       }
       
     }
