@@ -19,7 +19,7 @@ class GitEnv(object):
 	def __init__(self, startwith=''):
 		self.printstart = startwith
 		self.git_dir = op.join(HOME, '.git')
-		if op.exists(self.git_dir):
+		if op.isdir(self.git_dir):
 			self.isgit = True
 			self.hash, self.author, self.date = [str(s) for s in self.get_commit()]
 			self.url = str(self.get_remote())
@@ -28,7 +28,7 @@ class GitEnv(object):
 		else:
 			self.isgit = False
 			self.author = 'Dida Markovic'
-			self.date = str(datetime.date.today())
+			self.date = str(datetime.datetime.now())
 			self.repo = HOME
 
 	# Also, should have an if that gives out the name of the parent folder + the
