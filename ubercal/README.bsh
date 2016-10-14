@@ -1,14 +1,17 @@
 #Tests the possiblity of performing uber-cal to achieve the required relative spectro-photometric calibration
 
+# Compile both first
 make create-euclid-patch
-../bin/create-euclid-patch ../outputs/ 50 100 0 100 0 100
-
 make test-calibration
+
+# Then run (see source code for input parameter description)
+../bin/create-euclid-patch ../outputs/ 50 100 0 100 0 100 1 1 4
 ../bin/test-calibration ../outputs/ -1 ../samples/stars.dat
 
 
 #Current assumptions:
 
+#!Assumes Calibrator densities and SNR do not vary over survey!
+#!Assumes the exposure 0-points random Gaussian with no trends!
 #Assumes Euclidean geometry over survey
-#Assumes Calibrator densities and SNR do not vary over survey
 #Uses binned stellar densities

@@ -212,7 +212,7 @@ int main(int argc, char *argv[]) {
   int itmp;
 
   // minimisation
-  double ftol = 1e-3;
+  double ftol = 1e-7;
   powell(new_calib,xi,nexposure,ftol,&itmp,&endval,calc_chisq);
   free_dmatrix(xi,1,nexposure,1,nexposure);
   if (VERB>0) printf("After %i iterations, the final chi^2 = %g.\n", itmp, endval);
