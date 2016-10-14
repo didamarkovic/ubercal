@@ -12,9 +12,14 @@ Send an email to Dida Markovic (dida.markovic@port.ac.uk)
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <stdbool.h>
 
+// for diagnostics
 const int VERB = 0;
 FILE *FLIKE;
+
+// DET-To-DET or EXP-TO-EXP:
+bool DET = true;
 
 struct overlap_large {
   double area;             // area of overlap
@@ -127,16 +132,28 @@ int main(int argc, char *argv[]) {
   if(NDITH>EMAX) err_known("NDITH > EMAX");
   
   fscanf(fin_survey,"# NRA=%ld, NDEC=%ld\n",&NX,&NY);
-  nexposure = NDETX*NDETX*NDITH*NX*NY;
   fscanf(fin_survey,"# %ld overlap polygons\n",&noverlap);
 
   // memory for overlap polygons input
   if(!(p_overlap = (struct overlap_large*)malloc(noverlap*sizeof(struct overlap_large)))) 
     err_known("memory allocation problem for overlaps");
   
+  // Read in the overlap tiles and their exposure lists
+  // Set the number of exposures, defining an exposure as having the same 0-point
+  if(DET) nexposure = NDETX*NDETX*NDITH*NX*NY;
+  else nexposure = NDITH*NX*NY;
+  // Loop over overlap tiles in the file
   for(int i=0;i<noverlap;i++) {
     fscanf(fin_survey,"%*d %lf %d :",&p_overlap[i].area,&p_overlap[i].nexposure);
-    for(int ie=0;ie<p_overlap[i].nexposure;ie++) fscanf(fin_survey,"%d ",&p_overlap[i].iexposure[ie]);
+    if(VERB>2) printf("%d %lf %d :",i,p_overlap[i].area,p_overlap[i].nexposure);
+    // Loop over the exposures belonging to each tile
+    for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
+      fscanf(fin_survey,"%d ",&p_overlap[i].iexposure[ie]);
+      // Reassign index in case each detector is not a separate exposure
+      if(!DET) p_overlap[i].iexposure[ie]=p_overlap[i].iexposure[ie]/NDETX/NDETX;
+      if(VERB>2) printf("%d ",p_overlap[i].iexposure[ie]);
+    }
+    if(VERB>2) printf("\n");
     fscanf(fin_survey,"\n");
   }
   fclose(fin_survey);
