@@ -7,6 +7,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+import os.path as op
 from os.path import basename, isfile, isdir
 from glob import glob
 import pandas as pd
@@ -15,7 +16,7 @@ import coverage as c
 FS = 14
 matplotlib.rcParams.update({'font.size': FS})
 
-MINY = 1
+MINY = 0.0
 MAXY = 14.5
 
 # Get the baseline fcalb and icalb from the test.out file
@@ -78,7 +79,7 @@ def get_runs(outpath, rnames=0):
 	if not rnames: rnames = glob(outpath + '*')
 	if rnames == []: raise Exception("I found nothing in "+outpath)
 	
-	patterns = ["J", "S", "step", "box"]
+	patterns = ["J", "S", "R", "O"]
 	dfs = {}
 	tmp = []
 	
@@ -112,12 +113,12 @@ def get_baseline(rundir):
 	except IOError:
 		print "No baseline comparison available."
 		exit(1)
-		#pattern = ["J", "box"]
+		#pattern = ["J", "O"]
 		#fcalb = 0.0123985 
 	except UnboundLocalError:
 		print "No baseline comparison available."
 		exit(1)
-		#pattern = ["J", "box"]
+		#pattern = ["J", "O"]
 		#fcalb = 0.0123985 
 
 	return fcalb/icalb
@@ -129,13 +130,14 @@ def load_pattern(fname):
 	fhead += ['frac_0_dith','frac_1_dith','frac_2_dith','frac_3_dith','frac_4_dith']
 	return pd.read_table(fname, sep=' ', names=fhead, skiprows=2)
 
-def plot_vs_x(rundir, patterns=["J", "box", "S", "step"], plotssize = [None], linestyles = ['-', '--']):
+def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linestyles = ['-', '--']):
 	# Open all the pattern.dat (except baseline)
 	maxx=0; minx=float('inf')
 	for p in patterns:
 		if p=='baseline': continue
 
-		fname = rundir + p + '.dat'
+		ts = rundir.strip('/').split('/')[-1]
+		fname = op.join(rundir, p+'.dat')
 		tmp = load_pattern(fname)
 
 		# Find limits for x-axis
@@ -149,7 +151,8 @@ def plot_vs_x(rundir, patterns=["J", "box", "S", "step"], plotssize = [None], li
 				if np.sum(test)==0: raise Exception("No runs with "+str(npoint)+" pointings found in "+rundir+"!")
 			else:
 				test = range(len(tmp))
-			plt.plot(tmp.x_1[test], np.array(tmp.ical[test])/np.array(tmp.fcal[test]), style, label=c.convpat(p) + r': '+str(npoint)+'x'+str(npoint), c=C[p], lw=2); 
+			plt.plot(tmp.x_1[test], np.array(tmp.ical[test])/np.array(tmp.fcal[test]), style, 
+					 label = ts+': ' + c.convpat(p) + r': '+str(npoint)+'x'+str(npoint), c=C[p], lw=2); 
 			#plt.plot(tmp.x_1[test], 1 - tmp.frac_1_dith[test] - tmp.frac_2_dith[test] - tmp.frac_3_dith[test] - tmp.frac_4_dith[test], '--', label='0-pass coverage'); 
 			#plt.plot(tmp.x_1[test], tmp.frac_1_dith[test], ':', label='1-pass coverage'); 
 			#plt.plot(tmp.x_1[test], tmp.frac_2_dith[test], ':', label='2-pass coverage'); 
@@ -165,11 +168,11 @@ def plot_vs_x(rundir, patterns=["J", "box", "S", "step"], plotssize = [None], li
 	plt.ylabel(r'improvement ratio, $q$'); 
 	plt.legend(scatterpoints=1,fontsize=FS,loc=1,ncol=3, handletextpad=0);
 	#if max(tmp.d)>(DETX+2*GAPX): 
-	maxx = DETX+2*GAPX
+	#maxx = DETX+2*GAPX
 	plt.xlim([minx, maxx])
 	plt.ylim([MINY, MAXY])
 
-def plot_vs_d(rundir, patterns=["J", "box", "S", "step"], plotssize = [20, 19], linestyles = ['-', '--']):
+def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], linestyles = ['-', '--']):
 	# Open all the pattern.dat (except baseline)
 	maxx=0; minx=float('inf')
 	for p in patterns:
@@ -185,8 +188,12 @@ def plot_vs_d(rundir, patterns=["J", "box", "S", "step"], plotssize = [20, 19], 
 		# Plot line for each pattern
 		for npoint, style in zip(plotssize,linestyles):
 			if npoint is not None: 
-				test = tmp.no_pointings_x==npoint
-				if np.sum(test)==0: raise Exception("No runs with "+str(npoint)+" pointings found in "+rundir+"!")
+				test = tmp.no_pointings_x == npoint
+				if np.sum(test)==0: 
+					print "No runs with "+str(npoint)+" pointings found in "+rundir+"!",
+					npoint = min(tmp.no_pointings_x-npoint)+npoint
+					test = tmp.no_pointings_x == npoint
+					print "Plotting npoint="+str(npoint)+"instead."
 			else:
 				test = range(len(tmp))
 			plt.plot(tmp.d[test], np.array(tmp.ical[test])/np.array(tmp.fcal[test]), style, label=c.convpat(p) + r': '+str(npoint)+'x'+str(npoint), c=C[p], lw=2); 
@@ -204,7 +211,7 @@ def plot_vs_d(rundir, patterns=["J", "box", "S", "step"], plotssize = [20, 19], 
 	plt.xlim([minx, maxx])
 	plt.ylim([MINY, MAXY])
 
-def plot_vs_nx(rundir, patterns=["J", "box", "S", "step"], dx=[0.0, 50.0], linestyles = ['-', '--'], ms=10):
+def plot_vs_nx(rundir, patterns=["J", "O", "S", "R"], dx=[0.0, 50.0], linestyles = ['-', '--'], ms=10):
 	# Open all the pattern.dat (except baseline)
 	maxx=0; minn=0
 	for p in patterns:
