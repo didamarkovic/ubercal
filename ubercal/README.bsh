@@ -6,7 +6,7 @@ make test-calibration
 
 # Then run (see source code for input parameter description)
 ../bin/create-euclid-patch ../outputs/ 50 100 0 100 0 100 1 1 4
-../bin/test-calibration ../outputs/ -1 ../samples/stars.dat
+../bin/test-calibration ../outputs/ -1 ../samples/stars.dat 1e-15 1
 
 
 #Current assumptions:

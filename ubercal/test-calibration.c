@@ -19,7 +19,10 @@ const int VERB = 0;
 FILE *FLIKE;
 
 // DET-To-DET or EXP-TO-EXP:
-bool DET = true;
+const bool DET_DEF = true;
+
+// Default FTOL for Powell
+ const double FTOL_DEF = 1e-3;
 
 struct overlap_large {
   double area;             // area of overlap
@@ -68,7 +71,9 @@ double *rms_v, *dens_v;
 int main(int argc, char *argv[]) {
 
   char fname[bsz], fpath[bsz], fstar[bsz]; long seed = -1;
-  int NDETX;
+  int NDETX, TMP;
+  bool DET = DET_DEF;
+  double FTOL = FTOL_DEF;
 
   // ********************************************************************************
   // read input parameter for random seed
@@ -83,8 +88,14 @@ int main(int argc, char *argv[]) {
   } else {
     sscanf("./stars.dat", "%s", fstar);
   }
+  if (argc > 4) sscanf(argv[4], "%lg", &FTOL); 
+  if (argc > 5) {
+    sscanf(argv[5], "%d", &TMP);
+    DET = TMP;
+  }
+
   if(VERB>1) printf("Results in %s.\n",fpath);
-  if(VERB>0) printf("random seed = %ld\nStars in %s.\n",seed,fstar);
+  if(VERB>0) printf("det-to-det : %d, ftol = %0.0e, random seed = %ld\nStars in %s.\n",DET,FTOL,seed,fstar);
   fflush(stdout);  
 
   // ********************************************************************************
@@ -167,6 +178,14 @@ int main(int argc, char *argv[]) {
   double old_calib[nexposure+1], new_calib[nexposure+1];
   for(int i=1;i<=nexposure;i++) old_calib[i] = SIG_INIT*gasdev(&seed);
   
+  // calculate the basic stats (mean & scatter) of the initial setup
+  double mean_init=0.0, sigmasq_init=0.0;
+  for(int i=1;i<=nexposure;i++) {
+    mean_init += old_calib[i]; 
+    sigmasq_init += old_calib[i]*old_calib[i];
+  }
+  mean_init  /= (double)nexposure;
+
   // ********************************************************************************
   // set up mock flux measurements for each exposure of calibrators in overlaps
   for(int i=0;i<noverlap;i++) {
@@ -199,15 +218,12 @@ int main(int argc, char *argv[]) {
     // the (N-1)/N factor allows for decreased scatter around measured mean
     p_overlap[i].ssq_calib = (sigma*sigma+SIG_FINAL*SIG_FINAL) * (p_overlap[i].nexposure-1)/p_overlap[i].nexposure;
   }
-
-  // exit(0);
   
   // ********************************************************************************
   // perform minimisation
 
-  // slightly faster if you start with new_calib as the perfect answer (=-old_calib[i])
-  // but this doesn't seem fair!
-  for(int i=1;i<=nexposure;i++) new_calib[i]=0.0;
+  // start with new_calib far away and all at the same value of final 0-points to try to mitigate the convergence issues
+  for(int i=1;i<=nexposure;i++) new_calib[i]=SIG_INIT*100.0; // start far away from the answer
 
   // open file to write the minimisation steps
   if(VERB>1){
@@ -229,8 +245,7 @@ int main(int argc, char *argv[]) {
   int itmp;
 
   // minimisation
-  double ftol = 1e-7;
-  powell(new_calib,xi,nexposure,ftol,&itmp,&endval,calc_chisq);
+  powell(new_calib,xi,nexposure,FTOL,&itmp,&endval,calc_chisq);
   free_dmatrix(xi,1,nexposure,1,nexposure);
   if (VERB>0) printf("After %i iterations, the final chi^2 = %g.\n", itmp, endval);
 
@@ -262,19 +277,15 @@ int main(int argc, char *argv[]) {
   // ********************************************************************************
   // now test post-ubercal calibrations - these are the initial calibrations
   // for each exposure as stored in old_calib + the best-fit new calibrations in new_calib
-  double mean_init=0.0, sigmasq_init=0.0;
   double mean_final=0.0, sigmasq_final=0.0;
   double mean_cal=0.0, sigmasq_cal=0.0;
   for(int i=1;i<=nexposure;i++) {
     if(VERB>1) printf("Exposure %d, old flux %g, calibration %g, overlap mean %g\n",i,old_calib[i],new_calib[i], old_calib[i]+new_calib[i]);
-    mean_init  += old_calib[i]; 
     mean_final += old_calib[i]+new_calib[i]; 
     mean_cal += new_calib[i];
-    sigmasq_init  += old_calib[i]*old_calib[i];
     sigmasq_final += (old_calib[i]+new_calib[i])*(old_calib[i]+new_calib[i]);
     sigmasq_cal += new_calib[i]*new_calib[i];
   }
-  mean_init  /= (double)nexposure;
   mean_final /= (double)nexposure;
   mean_cal /= (double)nexposure;
   if(VERB>0) printf("Improvement due to Ubercal, q = %g and\n", sqrt(sigmasq_init/sigmasq_final)); 
