@@ -15,7 +15,7 @@ Send an email to Dida Markovic (dida.markovic@port.ac.uk)
 #include <stdbool.h>
 
 // for diagnostics
-const int VERB = 0;
+int VERB = 0;
 FILE *FLIKE;
 
 // DET-To-DET or EXP-TO-EXP:
@@ -93,6 +93,7 @@ int main(int argc, char *argv[]) {
     sscanf(argv[5], "%d", &TMP);
     DET = TMP;
   }
+  if (argc > 6) sscanf(argv[6], "%d", &VERB); 
 
   if(VERB>1) printf("Results in %s.\n",fpath);
   if(VERB>0) printf("det-to-det : %d, ftol = %0.0e, random seed = %ld\nStars in %s.\n",DET,FTOL,seed,fstar);
@@ -175,9 +176,13 @@ int main(int argc, char *argv[]) {
   // ********************************************************************************
   // set up initial calibration - all calibrators have these fluctuations in addition
   // their intrinsic measurement noise
-  double old_calib[nexposure+1], new_calib[nexposure+1];
-  for(int i=1;i<=nexposure;i++) old_calib[i] = SIG_INIT*gasdev(&seed);
-  
+  double old_calib[nexposure+1], new_calib[nexposure+1], flux_calib[nexposure+1], used_area[nexposure+1];
+  for(int i=1;i<=nexposure;i++) {
+    old_calib[i] = SIG_INIT*gasdev(&seed);
+    flux_calib[i] = 0.0; // want to store the flux density in each exposure later
+    used_area[i] = 0.0;
+  }
+
   // calculate the basic stats (mean & scatter) of the initial setup
   double mean_init=0.0, sigmasq_init=0.0;
   for(int i=1;i<=nexposure;i++) {
@@ -207,9 +212,13 @@ int main(int argc, char *argv[]) {
 
     // actual flux measurement for each exposure in overlap, drawn from the same
     // distribution for the intrinsic noise, plus the initial calibration of that exposure
+    double tmp_flux;
     for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
       if(nstar_tot>0) {
-        p_overlap[i].flux_calib[ie] = sigma*gasdev(&seed) + old_calib[p_overlap[i].iexposure[ie]+1];
+        tmp_flux = sigma*gasdev(&seed);
+        p_overlap[i].flux_calib[ie] = tmp_flux + old_calib[p_overlap[i].iexposure[ie]+1];
+        flux_calib[p_overlap[i].iexposure[ie]+1] += p_overlap[i].area*tmp_flux;
+        used_area[p_overlap[i].iexposure[ie]+1] += p_overlap[i].area;
       }
       else            p_overlap[i].flux_calib[ie] = 0.0;
       if(VERB>2) printf("The %g stars contribute to the f_meas = %g.\n", nstar_tot, p_overlap[i].flux_calib[ie]);
@@ -218,6 +227,7 @@ int main(int argc, char *argv[]) {
     // the (N-1)/N factor allows for decreased scatter around measured mean
     p_overlap[i].ssq_calib = (sigma*sigma+SIG_FINAL*SIG_FINAL) * (p_overlap[i].nexposure-1)/p_overlap[i].nexposure;
   }
+  for(int i=1;i<=nexposure;i++) flux_calib[i] /= used_area[i]; // normalise to total used area in each exposure
   
   // ********************************************************************************
   // perform minimisation
@@ -267,9 +277,9 @@ int main(int argc, char *argv[]) {
     err_known(fname);
     }
   fprintf(fout,"# %f initial scatter\n", SIG_INIT);
-  fprintf(fout,"# exposure-id initial-zero-point calibration-correction calibrated-zero-point\n");
+  fprintf(fout,"# exposure-id initial-zero-point used-area mean-measured-flux calibration-correction calibrated-zero-point\n");
   for(int i=1;i<=nexposure;i++){
-      fprintf(fout,"%i %g %g %g\n", i, old_calib[i], new_calib[i], old_calib[i]+new_calib[i]);
+      fprintf(fout,"%i %g %g %g %g %g\n", i, old_calib[i], flux_calib[i], used_area[i], new_calib[i], old_calib[i]+new_calib[i]);
   }
   fprintf(fout,"\n");
   fclose(fout);
