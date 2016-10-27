@@ -19,7 +19,6 @@ def revectorise(array, blocksize=4):
 	for i in range(nblocks):
 		for j in range(blocksize):
 			newarray[i*blocksize + j] = array[j*nblocks + i]
-			#print j*nblocks + i, '-->', i*blocksize + j
 
 	return newarray
 
@@ -35,20 +34,24 @@ if __name__=="__main__":
 	# Read from file & reorder so that all the exposures of each detector are adjacent 
 	if not os.path.isdir(args.cals): raise Exception(args.cals + ' is not a folder!')
 	cals = revectorise(np.loadtxt(args.cals+'/calibrations.txt'), blocksize=NDITH)
+	cals = revectorise(cals, blocksize=int(np.sqrt(len(cals)/NDITH)))
 	# re-index too
 	cals[:,0] = np.sort(cals[:,0])
 
 	# Make the plot
-	plt.bar(cals[:,0]-0.5, cals[:,1], fill=False, width=1, label='initial 0-points')
+	plt.bar(cals[:,0]-0.5, cals[:,1], fill=True, width=1, label='initial 0-points', color='0.5', ls='--', lw=0)
+	plt.bar(cals[:,0]-0.5, cals[:,2], fill=True, width=1, label='calibrator fluxes', color='g', alpha=0.5, ls='-', lw=0, bottom=cals[:,1])
 	plt.axhline(y=np.mean(cals[:,1]), ls='--', label='initial mean')
-	plt.axhline(y=np.mean(cals[:,3]), ls=':', label='final mean')
-	plt.plot(cals[:,0], cals[:,3], 'r.', label='calibrated 0-points')
+	plt.axhline(y=np.mean(cals[:,1])+np.mean(cals[:,2]), ls='-', color='y', label='initial tot mean', lw=1)
+	plt.axhline(y=np.mean(cals[:,-1]), ls=':', label='final mean')
+	plt.plot(cals[:,0], cals[:,-1], 'r.', label='calibrated 0-points')
+	plt.plot(cals[:,0], cals[:,-1]+cals[:,2], color='m', marker='+', label='calibrated fluxes', lw=0)
 
 	# Annotate
 	plt.xlabel('detector number')
 	plt.ylabel('zero points')
-	plt.legend()
-	plt.title(' & '.join(args.cals.split('/')[-3:-1]))
+	plt.legend(bbox_to_anchor=(1, 1), loc='lower right', ncol=2)
+	plt.title(' & '.join(args.cals.split('/')[-3:-1]), x=0.05)
 
 	# Show or save
 	if not args.save:
