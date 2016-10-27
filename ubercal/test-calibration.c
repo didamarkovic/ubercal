@@ -190,6 +190,7 @@ int main(int argc, char *argv[]) {
     sigmasq_init += old_calib[i]*old_calib[i];
   }
   mean_init  /= (double)nexposure;
+  sigmasq_init /= (double)nexposure;
 
   // ********************************************************************************
   // set up mock flux measurements for each exposure of calibrators in overlaps
@@ -233,7 +234,7 @@ int main(int argc, char *argv[]) {
   // perform minimisation
 
   // start with new_calib far away and all at the same value of final 0-points to try to mitigate the convergence issues
-  for(int i=1;i<=nexposure;i++) new_calib[i]=SIG_INIT*100.0; // start far away from the answer
+  for(int i=1;i<=nexposure;i++) new_calib[i]=-old_calib[i]+mean_init;
 
   // open file to write the minimisation steps
   if(VERB>1){
@@ -298,10 +299,15 @@ int main(int argc, char *argv[]) {
   }
   mean_final /= (double)nexposure;
   mean_cal /= (double)nexposure;
+  sigmasq_final /= (double)nexposure;
+  sigmasq_cal /= (double)nexposure;
+
+  // Want "sample mean", because we only care about survey uniformity, not deviation from the correct answer!
+  sigmasq_init -= mean_init*mean_init;
+  sigmasq_final -= mean_final*mean_final;
+  sigmasq_cal -= mean_cal*mean_cal;
+
   if(VERB>0) printf("Improvement due to Ubercal, q = %g and\n", sqrt(sigmasq_init/sigmasq_final)); 
-  sigmasq_init  = sigmasq_init/(double)nexposure;
-  sigmasq_final = sigmasq_final/(double)nexposure;
-  sigmasq_cal = sigmasq_cal/(double)nexposure;
 
   // Now calculate the true covariance between the true initial zero-points and the calibrations
   if(VERB>0){
@@ -311,7 +317,7 @@ int main(int argc, char *argv[]) {
     }
     cov_init_cal_diag/=(double)nexposure;
     printf("True correlation between the true zero-point and the final calibration correction = %g\n",
-     cov_init_cal_diag/sqrt((sigmasq_cal-mean_cal*mean_cal)*(sigmasq_init-mean_init*mean_init)));
+     cov_init_cal_diag/sqrt(sigmasq_cal*sigmasq_init));
   }
 
   if(VERB>0) printf("Initial 0-point %g, final 0-point %g, calibrated by %g\n", mean_init, mean_final, mean_cal);
@@ -366,10 +372,12 @@ double calc_chisq(double *new_calib) {
 
           // covariance, which becomes variance*Bessel factor for ie=je
           double cov_ieje = -p_overlap[i].ssq_calib/p_overlap[i].nexposure;
-          if(ie==je) cov_ieje += p_overlap[i].ssq_calib;
+          if(ie==je) {// remove co-variance - it only destabilises, but doesn't seem to change the result
+          cov_ieje += p_overlap[i].ssq_calib;
 
           double diff_i = new_flux[ie]-mean;
           chisq += diff_i*diff_j / cov_ieje;
+          }//remove co-variance - it only destabilises, but doesn't seem to change the result
         }
 
       }
