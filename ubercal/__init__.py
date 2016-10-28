@@ -5,6 +5,9 @@
 from subprocess import call
 import dith, io
 
+FTOL = 1e-8
+DETBOOL=1
+
 def test_calibration(starfile, seed=-1, calipath='./', outdir='./', outfile='./test-calibration.out', verb=False):
 	""" Runs test-calibration.c to simulate a normally distributed set of calibrations 
 		given a Mangle vertices file of the survey. It then finds the best fit and returns
@@ -22,7 +25,7 @@ def test_calibration(starfile, seed=-1, calipath='./', outdir='./', outfile='./t
 	# Run Will's code to simulate the calibrator statistics and do the ubercalibration test
 	with open(outfile, "w") as cf:
 
-		cmd = ['./test-calibration', outdir+'/', seed, starfile]
+		cmd = ['./test-calibration', outdir+'/', str(seed), str(starfile), str(FTOL), str(int(DETBOOL)), str(int(verb))]
 
 		if verb: print "In " + calipath + ", run:\n\t" + ' '.join(cmd)
 		try:
@@ -82,7 +85,10 @@ def compile(calipath='./'):
 		-------
 		None
 	"""
+
+	print "\n--------- Compiling ubercal... ---------"
 	call(['make','clean'], cwd = calipath)
 	call(['make','create-euclid-patch'], cwd = calipath)
 	call(['make','test-calibration'], cwd = calipath)
+	print "--------- Compilation finished. ---------\n"
 
