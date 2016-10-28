@@ -1,10 +1,6 @@
 #include <stdlib.h>
-// #include <fstream>
-// #include <iomanip>
 #include <stdio.h>
 #include <math.h>
-// #include <string>
-//#include <cpgplot.h>
 
 const int   NR_END     = 1;  
 
@@ -520,49 +516,61 @@ float poidev(float xm, long *idum)
 }
 #undef PI
 
-/*
-void dashedline(int n, float *x, float *y, float x1, float x2, float y1, float y2)
+
+#define SWAP(a,b) {temp=(a);(a)=(b);(b)=temp;}
+
+void gaussj(double **a, int n)
+//Matrix inversion by Gauss-Jordan of NR. 
+//http://www.physics.drexel.edu/~steve/Courses/Physics-501/NR-examples-1/gaussj_demo.c
+//a[1..n][1..n] is the input matrix. 
+//On output, a is replaced by its matrix inverse.
 {
-  float *d, dx, dy, dd, d1, d2, frac, xpl[2], ypl[2];
-  int i, j, nseg;
+  int *indxc,*indxr,*ipiv; 
+  int i,icol,irow,j,k,l,ll; 
+  double big,dum,pivinv,temp;
+  void err_handler(const char*);
 
-  d = vector(1,n);
-  
-  // plot dashed line segments of equal length,
-  //  assuming box aspect ratio of 1.228 : 1
-  
-  d[1]=0.;
-  for(i=2;i<=n;i++) {
-    dx = (x[i]-x[i-1])*1.228/(x2-x1);
-    dy = (y[i]-y[i-1])/(y2-y1);
-    dd = sqrt(dx*dx+dy*dy);
-    d[i] = d[i-1]+dd;
-  }
-
-  // 25 segments to the length of the y axis
-  nseg = (int)(25.*d[n]);
-  dd = d[n]/(float)nseg;
-
-  // divide into nseg segments, each of which we plot
-  // a line for 1/2 of the segment
-
-  for(i=1;i<=nseg;i++) {
-    d2 = ((float)i-0.25)*dd;
-    d1 = ((float)i-0.75)*dd;
-
-    for(j=1;j<=n;j++) {
-      if(d[j]<d1) {
-        frac=(d1-d[j])/(d[j+1]-d[j]);
-        xpl[0]=frac*x[j+1]+(1.-frac)*x[j];
-        ypl[0]=frac*y[j+1]+(1.-frac)*y[j];
-      }
-      if(d[j]<d2) {
-        frac=(d2-d[j])/(d[j+1]-d[j]);
-        xpl[1]=frac*x[j+1]+(1.-frac)*x[j];
-        ypl[1]=frac*y[j+1]+(1.-frac)*y[j];
-      }
+  indxc=ivector(1,n); 
+  indxr=ivector(1,n); 
+  ipiv=ivector(1,n);
+  for (j=1;j<=n;j++) ipiv[j]=0;
+  for (i=1;i<=n;i++) {
+    big=0.0;
+    for (j=1;j<=n;j++)
+      if (ipiv[j] != 1)
+        for (k=1;k<=n;k++) {
+          if (ipiv[k] == 0) {
+            if (fabs(a[j][k]) >= big) {
+              big=fabs(a[j][k]);
+              irow=j;
+              icol=k;
+            }
+          } else if (ipiv[k] > 1)
+              err_handler("gaussj: Singular Matrix");
+        }
+    ++(ipiv[icol]);
+    if (irow != icol) {
+      for (l=1;l<=n;l++) SWAP(a[irow][l],a[icol][l]) 
     }
-    cpgline(2,xpl,ypl);
+    indxr[i]=irow;
+    indxc[i]=icol;
+    if (a[icol][icol] == 0.0) err_handler("gaussj: Singular Matrix"); 
+    pivinv=1.0/a[icol][icol];
+    a[icol][icol]=1.0;
+    for (l=1;l<=n;l++) a[icol][l] *= pivinv;
+    for (ll=1;ll<=n;ll++) 
+      if (ll != icol) {
+        dum=a[ll][icol];
+        a[ll][icol]=0.0;
+        for (l=1;l<=n;l++) a[ll][l] -= a[icol][l]*dum; 
+      }
   }
+  for (l=n;l>=1;l--) {
+    if (indxr[l] != indxc[l]) 
+      for (k=1;k<=n;k++)
+        SWAP(a[k][indxr[l]],a[k][indxc[l]]);
+  }
+  free_ivector(ipiv,1,n);
+  free_ivector(indxr,1,n);
+  free_ivector(indxc,1,n);
 }
-*/
