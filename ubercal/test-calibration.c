@@ -335,22 +335,25 @@ double calc_chisq(double *new_calib) {
   if(VERB>2) printf("\n--- NEW ITERATION ---\n"); // diagnostics
 
   // this is the prior - we only expect calibrations of order the initial ones
-  double chisq0=0.0, chisq=0.0;
+  double chisq0=0.0;
   for(int i=1;i<=nexposure;i++){
-    chisq += new_calib[i]*new_calib[i];
+    chisq0 += new_calib[i]*new_calib[i];
     if(VERB>1) fprintf(FLIKE," %+1.3f", new_calib[i]); // diagnostics
   }
-  chisq /= (SIG_INIT*SIG_INIT);
-  if(VERB>1) chisq0 = chisq; // diagnostics
-
-  if(VERB>2) printf("\tchisq_0 = %g\n", chisq); // diagnostics
+  chisq0 /= (SIG_INIT*SIG_INIT);
+  if(VERB>2) printf("\tchisq_0 = %g\n", chisq0); // diagnostics
 
   // this holds the new flux measurements for each calibrator in each overlap
   double *new_flux = malloc(EMAX*sizeof(double)); 
   double *diffs = malloc(EMAX*sizeof(double));
 
-  // this is the big loop over overlaps - matching fluxes in each is ubercal! 
+  // this is the big loop over overlaps - matching fluxes in each is ubercal!
+  double chisq=0.0; 
   for(int i=0;i<noverlap;i++) if(p_overlap[i].nexposure>1) { 
+
+    // Number of exposure data to use in this tile
+    int nexp = p_overlap[i].nexposure-1;
+
     // new flux calibrations in overlaps
     // mean flux in each overlap
     double mean=0.0;
@@ -362,33 +365,33 @@ double calc_chisq(double *new_calib) {
     if(VERB>2) printf("\tmean in overlap %d = %g\n", i, mean); // diagnostics
 
     // get the chisq numerators (i.e. the data vectors)
-    for(int ie=0;ie<p_overlap[i].nexposure;ie++) diffs[ie] = new_flux[ie]-mean;
+    for(int ie=0;ie<nexp;ie++) diffs[ie] = new_flux[ie]-mean;
  
     // Build the covariance matric
     if(VERB>2) printf("\toverlap tile number %d\n", i); // diagnostics
-    double **C = dmatrix(1,p_overlap[i].nexposure,1,p_overlap[i].nexposure);
-    for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
-      for(int je=0;je<p_overlap[i].nexposure;je++) {
+    double **C = dmatrix(1,nexp,1,nexp);
+    for(int ie=0;ie<nexp;ie++) {
+      for(int je=0;je<nexp;je++) {
         // covariance, which becomes variance*Bessel factor for ie=je
-        C[ie+1][je+1] = 0.0;//-p_overlap[i].ssq_calib/p_overlap[i].nexposure;
+        C[ie+1][je+1] = -p_overlap[i].ssq_calib/p_overlap[i].nexposure;
         if(ie==je) C[ie+1][je+1] += p_overlap[i].ssq_calib;
         if(VERB>2) printf("\tC[%d][%d] = %g, with sig2 = %g and N_exp = %d\n", ie, je, C[ie+1][je+1], p_overlap[i].ssq_calib, p_overlap[i].nexposure); // diagnostics
       } 
     }
 
     // Invert the matrix - use Gauss-Jordan algorithm from NR
-    gaussj(C,p_overlap[i].nexposure);
+    gaussj(C,nexp);
   
     // add to chi^2 for this overlap region from differences with mean
     // relies on ssq.calib being covariance of exposure calibration measurements
     // around their sample mean
-    for(int je=0;je<p_overlap[i].nexposure;je++) {
-      for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
+    for(int je=0;je<nexp;je++) {
+      for(int ie=0;ie<nexp;ie++) {
         if(VERB>2) printf("\tC-inv[%d][%d] = %g\n", ie, je, C[ie+1][je+1]); // diagnostics
         chisq += diffs[ie]*diffs[je]*C[ie+1][je+1];  
-      }  
+      }
     }
-    //free_dmatrix(C,1,p_overlap[i].nexposure,1,p_overlap[i].nexposure);
+    free_dmatrix(C,1,nexp,1,nexp);
   }
   free(new_flux); free(diffs);
 
@@ -400,6 +403,6 @@ double calc_chisq(double *new_calib) {
   }
   if(VERB>2) printf("\tchisq_tot = %g at sig_i = %g\n", chisq, SIG_INIT);
 
-  return chisq;
+  return chisq+chisq0;
 }
 
