@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
     }
     // variance of distribution of measured fluxes around mean
     // the (N-1)/N factor allows for decreased scatter around measured mean
-    p_overlap[i].ssq_calib = (sigma*sigma+SIG_FINAL*SIG_FINAL) * (p_overlap[i].nexposure-1)/p_overlap[i].nexposure;
+    p_overlap[i].ssq_calib = (sigma*sigma+SIG_FINAL*SIG_FINAL);
   }
   for(int i=1;i<=nexposure;i++) flux_calib[i] /= used_area[i]; // normalise to total used area in each exposure
   

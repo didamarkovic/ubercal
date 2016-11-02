@@ -5,7 +5,7 @@
 from subprocess import call
 import dith, io
 
-FTOL = 1e-8
+FTOL = 1e-6
 DETBOOL=1
 
 def test_calibration(starfile, seed=-1, calipath='./', outdir='./', outfile='./test-calibration.out', verb=False):
