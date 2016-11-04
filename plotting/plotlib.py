@@ -148,7 +148,9 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 		for npoint, style in zip(plotssize,linestyles):
 			if npoint is not None: 
 				test = tmp.no_pointings_x==npoint
-				if np.sum(test)==0: raise Exception("No runs with "+str(npoint)+" pointings found in "+rundir+"!")
+				if np.sum(test)==0: 
+					print "No runs with "+str(npoint)+" pointings found in "+rundir+"! Plotting all!"
+					test = range(len(tmp))
 			else:
 				test = range(len(tmp))
 			plt.plot(tmp.x_1[test], np.array(tmp.ical[test])/np.array(tmp.fcal[test]), style, 

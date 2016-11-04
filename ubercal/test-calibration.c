@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
     err_known(fname);
     }
   fprintf(fout,"# %f initial scatter\n", SIG_INIT);
-  fprintf(fout,"# exposure-id initial-zero-point used-area mean-measured-flux calibration-correction calibrated-zero-point\n");
+  fprintf(fout,"# exposure-id initial-zero-point mean-measured-flux used-area calibration-correction calibrated-zero-point\n");
   for(int i=1;i<=nexposure;i++){
       fprintf(fout,"%i %g %g %g %g %g\n", i, old_calib[i], flux_calib[i], used_area[i], new_calib[i], old_calib[i]+new_calib[i]);
   }
