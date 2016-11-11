@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
     err_known("memory allocation problem for overlaps");
 
   // decrease the scatter if we only very it exposure to exposure
-  if(DET)SIG_INIT/=(double)NDETX;
+  if(!DET)SIG_INIT/=(double)NDETX;
   
   // Read in the overlap tiles and their exposure lists
   // Set the number of exposures, defining an exposure as having the same 0-point

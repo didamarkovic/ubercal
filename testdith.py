@@ -370,7 +370,7 @@ if __name__=='__main__':
 		[ts, fn] = test_dithers(dx=args.xmax,pattern=args.patterns, NX = args.nx, NY = args.ny, 
 			nsur = args.surveys, totcals=args.nsizes, mode=args.mode, seed=str(args.seed), dy=args.ymax, 
 			verb=args.verbose, rundir=rundir, calipath=os.path.abspath(args.calipath), 
-			starfile=os.path.abspath(args.starpath), cont=args.carryon, detbool=args.det, ftol=args.ftol)
+			starfile=os.path.abspath(args.starpath), cont=args.carryon, detbool=args.detbool, ftol=args.ftol)
 	except:
 		tb = traceback.format_exc()
 		f.write("\n...INTERRUPTED due to:\n" + tb)

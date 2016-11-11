@@ -149,12 +149,14 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 			if npoint is not None: 
 				test = tmp.no_pointings_x==npoint
 				if np.sum(test)==0: 
-					print "No runs with "+str(npoint)+" pointings found in "+rundir+"! Plotting all!"
-					test = range(len(tmp))
+					print "No runs with "+str(int(npoint))+" pointings found in "+rundir+"!",
+					npoint = min(tmp.no_pointings_x-npoint)+npoint
+					test = tmp.no_pointings_x == npoint
+					print "Plotting npoint="+str(int(npoint))+" instead."
 			else:
 				test = range(len(tmp))
 			plt.plot(tmp.x_1[test], np.array(tmp.fcal[test]), style, 
-					 label = ts+': ' + c.convpat(p) + r': '+str(npoint)+'x'+str(npoint), c=C[p], lw=2); 
+					 label = c.convpat(p) + r': '+str(int(npoint))+'x'+str(int(npoint)), c=C[p], lw=2); 
 			#plt.plot(tmp.x_1[test], 1 - tmp.frac_1_dith[test] - tmp.frac_2_dith[test] - tmp.frac_3_dith[test] - tmp.frac_4_dith[test], '--', label='0-pass coverage'); 
 			#plt.plot(tmp.x_1[test], tmp.frac_1_dith[test], ':', label='1-pass coverage'); 
 			#plt.plot(tmp.x_1[test], tmp.frac_2_dith[test], ':', label='2-pass coverage'); 
@@ -168,7 +170,7 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 		plt.axvline(BASELINE_x, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
 		plt.scatter(BASELINE_x, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
 	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
-	plt.legend(scatterpoints=1,fontsize=FS,loc=1,ncol=3, handletextpad=0);
+	plt.legend(scatterpoints=1,fontsize=FS,loc=2,ncol=3, handletextpad=0);
 	#if max(tmp.d)>(DETX+2*GAPX): 
 	#maxx = DETX+2*GAPX
 	plt.xlim([minx, maxx])
@@ -180,7 +182,7 @@ def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], lines
 	for p in patterns:
 		if p=='baseline': continue
 
-		fname = rundir + p + '.dat'
+		fname = op.join(rundir,p+'.dat')
 		tmp = load_pattern(fname)
 
 		# Find limits for x-axis
@@ -192,13 +194,13 @@ def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], lines
 			if npoint is not None: 
 				test = tmp.no_pointings_x == npoint
 				if np.sum(test)==0: 
-					print "No runs with "+str(npoint)+" pointings found in "+rundir+"!",
+					print "No runs with "+str(int(npoint))+" pointings found in "+rundir+"!",
 					npoint = min(tmp.no_pointings_x-npoint)+npoint
 					test = tmp.no_pointings_x == npoint
-					print "Plotting npoint="+str(npoint)+"instead."
+					print "Plotting npoint="+str(int(npoint))+" instead."
 			else:
 				test = range(len(tmp))
-			plt.plot(tmp.d[test], np.array(tmp.fcal[test]), style, label=c.convpat(p) + r': '+str(npoint)+'x'+str(npoint), c=C[p], lw=2); 
+			plt.plot(tmp.d[test], np.array(tmp.fcal[test]), style, label=c.convpat(p) + r': '+str(int(npoint))+'x'+str(int(npoint)), c=C[p], lw=2); 
 		
 	plt.xlabel('total distance, $D$ ["]'); 
 	#plt.axvline(np.sqrt(5*DX_TRANSITION**2), color='k',ls=':')
