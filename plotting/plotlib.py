@@ -153,7 +153,7 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 					test = range(len(tmp))
 			else:
 				test = range(len(tmp))
-			plt.plot(tmp.x_1[test], np.array(tmp.ical[test])/np.array(tmp.fcal[test]), style, 
+			plt.plot(tmp.x_1[test], np.array(tmp.fcal[test]), style, 
 					 label = ts+': ' + c.convpat(p) + r': '+str(npoint)+'x'+str(npoint), c=C[p], lw=2); 
 			#plt.plot(tmp.x_1[test], 1 - tmp.frac_1_dith[test] - tmp.frac_2_dith[test] - tmp.frac_3_dith[test] - tmp.frac_4_dith[test], '--', label='0-pass coverage'); 
 			#plt.plot(tmp.x_1[test], tmp.frac_1_dith[test], ':', label='1-pass coverage'); 
@@ -167,7 +167,7 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 		baseline_y = 1.0/get_baseline(rundir)
 		plt.axvline(BASELINE_x, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
 		plt.scatter(BASELINE_x, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
-	plt.ylabel(r'improvement ratio, $q$'); 
+	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
 	plt.legend(scatterpoints=1,fontsize=FS,loc=1,ncol=3, handletextpad=0);
 	#if max(tmp.d)>(DETX+2*GAPX): 
 	#maxx = DETX+2*GAPX
@@ -198,7 +198,7 @@ def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], lines
 					print "Plotting npoint="+str(npoint)+"instead."
 			else:
 				test = range(len(tmp))
-			plt.plot(tmp.d[test], np.array(tmp.ical[test])/np.array(tmp.fcal[test]), style, label=c.convpat(p) + r': '+str(npoint)+'x'+str(npoint), c=C[p], lw=2); 
+			plt.plot(tmp.d[test], np.array(tmp.fcal[test]), style, label=c.convpat(p) + r': '+str(npoint)+'x'+str(npoint), c=C[p], lw=2); 
 		
 	plt.xlabel('total distance, $D$ ["]'); 
 	#plt.axvline(np.sqrt(5*DX_TRANSITION**2), color='k',ls=':')
@@ -207,7 +207,7 @@ def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], lines
 		print BASELINE_d
 		plt.scatter(BASELINE_d, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
 		plt.axvline(BASELINE_d, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
-	plt.ylabel(r'improvement ratio, $q$'); 
+	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
 	plt.legend(scatterpoints=1, fontsize=FS, loc=2, ncol=3, handletextpad=0);
 	if max(tmp.d)>MAXD/4.0: maxx = MAXD/4.0
 	plt.xlim([minx, maxx])
@@ -229,10 +229,10 @@ def plot_vs_nx(rundir, patterns=["J", "O", "S", "R"], dx=[0.0, 50.0], linestyles
 		# Plot line for each pattern
 		for dsize, style in zip(dx,linestyles):
 			test = tmp.x_1==dsize
-			plt.plot(np.array(tmp.no_pointings_x[test]), np.array(tmp.fcal[test])/np.array(tmp.ical[test]), style, ms=ms)#, label=p + '-pattern: '+str(dsize)+'"'); 
+			plt.plot(np.array(tmp.no_pointings_x[test]), np.array(tmp.fcal[test]), style, ms=ms)#, label=p + '-pattern: '+str(dsize)+'"'); 
 		
 	plt.xlabel('root number of pointings in survey'); 
-	plt.ylabel(r'improvement ratio, $q$'); 
+	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
 	plt.legend(bbox_to_anchor=(1.0, 0.3), fontsize=FS);
 	#plt.xlim([minn, maxx])
 
