@@ -38,8 +38,10 @@ def config_file(pats):
 	for pat in pats: fnm += "-" + pat
 	return fnm + '.ini'
 
-def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=None, mode='test', seed=None, dy=None, \
-	verb=False, rundir=os.path.join(thispath, 'outputs/', ts), calipath=os.path.join(thispath,'bin'), starfile=os.path.join(thispath,'samples/stars.dat'),cont=False):
+def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=None, mode='test', \
+				 seed=None, dy=None, verb=False, rundir=os.path.join(thispath, 'outputs/', ts), \
+				 calipath=os.path.join(thispath,'bin'), starfile=os.path.join(thispath,'samples/stars.dat'),
+				 cont=False, detbool=ubercal.DETBOOL, ftol=ubercal.FTOL):
 
 	if cont: 
 		timestamp = seed
@@ -108,7 +110,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 		area, frac = ubercal.dith.create_surveypatch(bl, NX, NY, calipath, rundir, os.path.join(rundir, 'baseline_patch.out'), verb)
 
 		### Run Will's code to test the ubercalibration using the baseline survey
-		icalb, fcalb = ubercal.test_calibration(starfile, seed, calipath, rundir, os.path.join(rundir, 'baseline_test.out'), verb)
+		icalb, fcalb = ubercal.test_calibration(starfile, seed, calipath, rundir, os.path.join(rundir, 'baseline_test.out'), verb, detbool, ftol)
 
 		# Save the above into the baseline output file
 		row = [0, d, area] + [icalb,fcalb] + list(bl) + [NX, NY] + frac
@@ -207,7 +209,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 						if verb: print "No " + califile
 
-						ical, fcal = ubercal.test_calibration(starfile, seed, calipath, outdir, califile, verb)
+						ical, fcal = ubercal.test_calibration(starfile, seed, calipath, outdir, califile, verb, detbool, ftol)
 										
 					else:
 						
@@ -220,7 +222,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 
 						# If the file is unfinished, run test-calibration again
 						if ical is None or fcal is None:
-							ical, fcal = ubercal.test_calibration(starfile, seed, calipath, outdir, califile, verb)
+							ical, fcal = ubercal.test_calibration(starfile, seed, calipath, outdir, califile, verb, detbool, ftol)
 
 					# Append results of this dither size the result array
 					row = [int(i), d, area] + [ical,fcal] + list(np.hstack(new_dithers)) + [nx, ny] + frac
@@ -305,7 +307,10 @@ if __name__=='__main__':
 	parser.add_argument("-o", "--outpath", default=thispath, help="where you want or have your 'outputs' folder")
 	parser.add_argument("-c", "--calipath", default=thispath+"/bin/", help="directory containing test-calibration binaries")
 	parser.add_argument("-st", "--starpath", default=thispath+'/samples/stars.dat', help="file containing a table of stellar populations, densities and their SNR")
-	
+
+	# Some additional options	
+	parser.add_argument("-d", "--detbool", action='store_true', default=False, help="vary 0-points detector to detector instead of exposure to exposure")
+	parser.add_argument("-e", "--ftol", default=ubercal.FTOL, help="tolerance parameter for the optimisation")
 	parser.add_argument("-l", "--compile", default=None, help="compile the C-code before running - input the source code folder")
 
 	# Save the inputs:
@@ -363,9 +368,9 @@ if __name__=='__main__':
 	exitcode=0
 	try:
 		[ts, fn] = test_dithers(dx=args.xmax,pattern=args.patterns, NX = args.nx, NY = args.ny, 
-			nsur = args.surveys, totcals=args.nsizes, \
-			mode=args.mode, seed=str(args.seed), dy=args.ymax, 
-			verb=args.verbose, rundir=rundir, calipath=os.path.abspath(args.calipath), starfile=os.path.abspath(args.starpath), cont=args.carryon)
+			nsur = args.surveys, totcals=args.nsizes, mode=args.mode, seed=str(args.seed), dy=args.ymax, 
+			verb=args.verbose, rundir=rundir, calipath=os.path.abspath(args.calipath), 
+			starfile=os.path.abspath(args.starpath), cont=args.carryon, detbool=args.det, ftol=args.ftol)
 	except:
 		tb = traceback.format_exc()
 		f.write("\n...INTERRUPTED due to:\n" + tb)

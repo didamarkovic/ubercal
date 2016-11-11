@@ -58,8 +58,8 @@ void gaussj(double **m, int n);
 double calc_chisq(double*);
 
 // some global variables that save effort
-const double SIG_INIT = 0.16;                // 4% initial exposure calibration (16% detector)
-const double SIG_FINAL = 0.0;                // 0% expected final calibration (?)
+double SIG_INIT = 0.16;                // 4% initial exposure calibration (16% detector)
+double SIG_FINAL = 0.0;                // 0% expected final calibration (?)
 long nexposure, noverlap;
 
 // buffer size
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
     sscanf(argv[5], "%d", &TMP);
     DET = TMP;
   }
-  if (argc > 6) sscanf(argv[6], "%d", &VERB); 
+  if (argc > 6) sscanf(argv[6], "%d", &VERB);
 
   if(VERB>1) printf("Results in %s.\n",fpath);
   if(VERB>0) printf("det-to-det : %d, ftol = %0.0e, random seed = %ld\nStars in %s.\n",DET,FTOL,seed,fstar);
@@ -152,6 +152,9 @@ int main(int argc, char *argv[]) {
   // memory for overlap polygons input
   if(!(p_overlap = (struct overlap_large*)malloc(noverlap*sizeof(struct overlap_large)))) 
     err_known("memory allocation problem for overlaps");
+
+  // decrease the scatter if we only very it exposure to exposure
+  if(DET)SIG_INIT/=(double)NDETX;
   
   // Read in the overlap tiles and their exposure lists
   // Set the number of exposures, defining an exposure as having the same 0-point
@@ -312,7 +315,9 @@ int main(int argc, char *argv[]) {
     strcat(fname, " <- c-e-p cannot open output file");
     err_known(fname);
     }
-  fprintf(fout,"# %f initial scatter\n", SIG_INIT);
+  fprintf(fout,"# %f initial", SIG_INIT);
+  if(DET){fprintf(fout," det-to-det scatter, %dx%d detectors\n", NDETX,NDETX);}
+  else{fprintf(fout," exp-to-exp scatter, %dx%d detectors\n", NDETX,NDETX);}
   fprintf(fout,"# exposure-id initial-zero-point mean-measured-flux used-area calibration-correction calibrated-zero-point\n");
   for(int i=1;i<=nexposure;i++){
       fprintf(fout,"%i %g %g %g %g %g\n", i, old_calib[i], flux_calib[i], used_area[i], new_calib[i], old_calib[i]+new_calib[i]);
@@ -323,6 +328,7 @@ int main(int argc, char *argv[]) {
   // ********************************************************************************
   // now test post-ubercal calibrations - these are the initial calibrations
   // for each exposure as stored in old_calib + the best-fit new calibrations in new_calib
+
   double mean_final=0.0, sigmasq_final=0.0;
   double mean_cal=0.0, sigmasq_cal=0.0;
   for(int i=1;i<=nexposure;i++) {
