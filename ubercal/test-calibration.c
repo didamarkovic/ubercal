@@ -21,12 +21,14 @@ FILE *FLIKE;
 // DET-To-DET or EXP-TO-EXP:
 const bool DET_DEF = true;
 
-// Default FTOL for Powell
- const double FTOL_DEF = 1e-3;
+// Default FTOL & NTOL for optimisation
+const double FTOL_DEF = 1e-3;
+const int NTOL = 10000;
 
 struct overlap_large {
   double area;             // area of overlap
   double ssq_calib;        // sigma^2 for calibrators in this exposure covering the overlap region
+  double mean_calib;       // mean for calibrators in this exposure covering the overlap region
   int nexposure;           // number of exposures
   int iexposure[4];     // integers of exposure IDs included in this overlap
   double flux_calib[4]; // normalised total flux measured for calibrators in this overlap
@@ -215,62 +217,94 @@ int main(int argc, char *argv[]) {
     // actual flux measurement for each exposure in overlap, drawn from the same
     // distribution for the intrinsic noise, plus the initial calibration of that exposure
     double tmp_flux;
+    p_overlap[i].mean_calib = 0.0;
     for(int ie=0;ie<p_overlap[i].nexposure;ie++) {
       if(nstar_tot>0) {
         tmp_flux = sigma*gasdev(&seed);
         p_overlap[i].flux_calib[ie] = tmp_flux + old_calib[p_overlap[i].iexposure[ie]+1];
         flux_calib[p_overlap[i].iexposure[ie]+1] += p_overlap[i].area*tmp_flux;
         used_area[p_overlap[i].iexposure[ie]+1] += p_overlap[i].area;
+        p_overlap[i].mean_calib += p_overlap[i].flux_calib[ie];
       }
       else            p_overlap[i].flux_calib[ie] = 0.0;
       if(VERB>2) printf("The %g stars contribute to the f_meas = %g.\n", nstar_tot, p_overlap[i].flux_calib[ie]);
     }
-    // variance of distribution of measured fluxes around mean
-    // the (N-1)/N factor allows for decreased scatter around measured mean
+    // mean & variance of distribution of measured fluxes around mean
+    // the (N-1)/N factor later allows for decreased scatter around measured mean
     p_overlap[i].ssq_calib = (sigma*sigma+SIG_FINAL*SIG_FINAL);
+    if(p_overlap[i].nexposure>0) p_overlap[i].mean_calib /= p_overlap[i].nexposure;
+    else  p_overlap[i].mean_calib = 0.0;
   }
   for(int i=1;i<=nexposure;i++) flux_calib[i] /= used_area[i]; // normalise to total used area in each exposure
   
   // ********************************************************************************
-  // perform minimisation
+  // perform iteration
+  
+  //// open file to write the iteration steps
+  //if(VERB>1){
+  //  strcpy(fname, fpath);
+  //  strcat(fname,"likelihoods.txt");
+  //  if((FLIKE=fopen(fname,"w"))==NULL) {
+  //    strcat(fname, " <- c-e-p cannot open output file");
+  //    err_known(fname);
+  //  }
+  //  fprintf(FLIKE,"# last line would be perfect\n");
+  //}
 
-  // start with new_calib far away and all at the same value of final 0-points to try to mitigate the convergence issues
-  for(int i=1;i<=nexposure;i++) new_calib[i]=0.0;//-old_calib[i]+mean_init;
+  // Calculate the 0-points from weighted average of deviations from the overlap mean iteratively
+  double maxstep=1e100, prev_maxstep=1e100, fluxi=0.0, fluxj=0.0, chisq=1e100, prev_chisq=2e100;
+  int nstep=0; 
+  double norm[nexposure+1], del[nexposure+1];
+  for(int i=1;i<=nexposure;i++) {del[i]=0.0; norm[i]=0.0; new_calib[i]=0.0;}
+  while(prev_chisq-chisq>FTOL && nstep<NTOL){
+    nstep++;
+    for(int i=1;i<=nexposure;i++) {del[i]=0.0; norm[i]=0.0;}
 
-  // open file to write the minimisation steps
-  if(VERB>1){
-    strcpy(fname, fpath);
-    strcat(fname,"likelihoods.txt");
-    if((FLIKE=fopen(fname,"w"))==NULL) {
-      strcat(fname, " <- c-e-p cannot open output file");
-      err_known(fname);
+    // loop over all the overlaps to find pairs of exposures
+    for(int l=0;l<noverlap;l++){
+
+      // do this by checking all the exposure IDs in each overlap scanned, l
+      for(int ie=0;ie<p_overlap[l].nexposure;ie++){
+        // add over all the exposure pairs in l
+        for(int je=0;je<p_overlap[l].nexposure;je++){
+          if(ie!=je && p_overlap[l].ssq_calib>0 && p_overlap[l].ssq_calib<1e100){
+            fluxi = p_overlap[l].flux_calib[ie] + new_calib[p_overlap[l].iexposure[ie]+1];
+            fluxj = p_overlap[l].flux_calib[je] + new_calib[p_overlap[l].iexposure[je]+1];
+            del[p_overlap[l].iexposure[ie]+1] += (fluxi-fluxj)/2.0/p_overlap[l].ssq_calib;
+            norm[p_overlap[l].iexposure[ie]+1] += 1.0/p_overlap[l].ssq_calib;
+          }
+        } 
+      } // IE - loop over exposures in overlap l
+
+    } // L - loop over overlap tiles
+
+    // Calculate result of iteration and test for convergence
+    prev_maxstep = maxstep; prev_chisq = chisq;
+    maxstep=FTOL;
+    for(int i=1;i<=nexposure;i++){
+      if(del[i]*del[i]>0.0){
+        if((del[i]/norm[i])*(del[i]/norm[i])>maxstep*maxstep) maxstep = sqrt(del[i]/norm[i]*del[i]/norm[i]);
+        new_calib[i] -= del[i]/norm[i];  
+      }
     }
-    fprintf(FLIKE,"# last line would be perfect, last two columns are the total chisq and the 'prior'\n");
-  }
+    chisq = calc_chisq(new_calib)/nexposure;
+    if(maxstep>prev_maxstep){printf("ERROR: Divergence.\n"); exit(1);}
+    if(chisq>prev_chisq){printf("WARNING: Chisq increased by %g!!\n", chisq-prev_chisq);}
 
-  // internal parameters required by powell
-  double **xi = dmatrix(1,nexposure,1,nexposure);
-  for(int i=1;i<=nexposure;i++)
-    for(int j=1;j<=nexposure;j++) 
-      xi[i][j]=(i==j?0.1*SIG_INIT:0.0);
-  double endval=0.0;
-  int itmp;
+  } // while chisq step big
+  if(nstep==NTOL)printf("WARNING: Maximum number of steps reached in iteration without convergence.\n");
+  if (VERB>0) printf("After %i iterations, the final chi^2/dof = %g.\n", nstep, chisq);
 
-  // minimisation
-  powell(new_calib,xi,nexposure,FTOL,&itmp,&endval,calc_chisq);
-  free_dmatrix(xi,1,nexposure,1,nexposure);
-  if (VERB>0) printf("After %i iterations, the final chi^2 = %g.\n", itmp, endval);
-
-  // print truth and close file
-  if(VERB>1){
-    for(int i=1;i<=nexposure;i++) fprintf(FLIKE," %+1.3f", -old_calib[i]);
-    fprintf(FLIKE," 0.0 0.0\n");
-    fprintf(FLIKE,"\n");
-    fclose(FLIKE);
-  }
+  //// print truth and close file
+  //if(VERB>1){
+  //  for(int i=1;i<=nexposure;i++) fprintf(FLIKE," %+1.3f", -old_calib[i]);
+  //  fprintf(FLIKE," 0.0 0.0\n");
+  //  fprintf(FLIKE,"\n");
+  //  fclose(FLIKE);
+  //}
 
   // ********************************************************************************
-  // write the results of the minimisation to a file
+  // write the results of the optimisation to a file
   FILE *fout;
   strcpy(fname, fpath);
   strcat(fname,"calibrations.txt");
@@ -405,4 +439,3 @@ double calc_chisq(double *new_calib) {
 
   return chisq+chisq0;
 }
-
