@@ -361,10 +361,16 @@ int main(int argc, char *argv[]) {
      cov_init_cal_diag/sqrt(sigmasq_cal*sigmasq_init));
   }
 
-  if(VERB>0) printf("Initial 0-point %g, final 0-point %g, calibrated by %g\n", mean_init, mean_final, mean_cal);
+  // Check if we are varying the 0-points exp-to-exp or det-to-det 
+  // - we want to output the scatter on exposure scales either way!
+  double scale=1.0;
+  if(DET)scale=(double)NDETX;
 
+  // Print things 
+  if(VERB>0) printf("Initial 0-point %g, final 0-point %g, calibrated by %g\n", 
+    mean_init, mean_final, mean_cal);
   printf("Initial scatter %g, final scatter %g, calibration scatter %g\n",
-   sqrt(sigmasq_init), sqrt(sigmasq_final), sqrt(sigmasq_cal));
+    sqrt(sigmasq_init)/scale, sqrt(sigmasq_final)/scale, sqrt(sigmasq_cal)/scale);
 
   exit(0);
 }
