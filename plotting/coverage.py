@@ -24,20 +24,21 @@ NDETX = 4
 NDETY = NDETX
 XGAP = 50.0
 YGAP = 100.0
-XDET = 612.0
+XDET = 600.0
 YDET = XDET
 SCALE = 3600.0
 PRECISION = 0.1 # in arcsec
 
 PATTERNS = {
-	'J': np.array([   XGAP,YGAP,   0.0,YGAP,   0.0, YGAP]),
-	'S': np.array([   XGAP,YGAP,   0.0,YGAP,  XGAP, YGAP]),
-	'step': np.array([XGAP,YGAP, XGAP,  0.0,  XGAP,  0.0]), # deprecate
-	'R': np.array([XGAP,YGAP, XGAP,  0.0,  XGAP,  0.0]),
-	'N': np.array([   XGAP,YGAP, XGAP,  0.0,  XGAP, YGAP]),
-	'X': np.array([   XGAP,YGAP,  0.0,  0.0, -XGAP,-YGAP]),
-	'box': np.array([ XGAP, 0.0,  0.0,100.0, -XGAP,  0.0]), # deprecate
-	'O': np.array([ XGAP, 0.0,  0.0,100.0, -XGAP,  0.0])
+	'J': np.array([    XGAP, YGAP,  0.0, YGAP,  0.0, YGAP]),
+	'S': np.array([    XGAP, YGAP,  0.0, YGAP, XGAP, YGAP]),
+	'step': np.array([ XGAP, YGAP, XGAP,  0.0, XGAP,  0.0]), # deprecated
+	'R': np.array([    XGAP, YGAP, XGAP,  0.0, XGAP,  0.0]),
+	'N': np.array([    XGAP, YGAP, XGAP,  0.0, XGAP, YGAP]),
+	'X': np.array([    XGAP, YGAP,  0.0,  0.0,-XGAP,-YGAP]),
+	'box': np.array([  XGAP,  0.0,  0.0, YGAP,-XGAP,  0.0]), # deprecated
+	'O': np.array([    XGAP,  0.0,  0.0, YGAP,-XGAP,  0.0]),
+	'I': np.array([     0.0, YGAP,  0.0, YGAP,  0.0, YGAP])  # testing-only
 	}
 
 # Path for execution (either input or find)
@@ -79,7 +80,7 @@ def create_euclid_patch(dithvec, outpath, nra=1, ndec=1, ndetx=4, binary='create
 	# Construct the call with the correct input arguments
 	bindir, binfile = op.split(binary)
 	cmd = ['./'+binfile,outpath] + [str(x) for x in dithvec] + [str(nra), str(ndec), str(ndetx)]
-	if verb>1: print ' '.join(cmd)
+	if verb>1: print '--- Running: ' + ' '.join(cmd)
 
 	# Check that the binary exists
 	if not op.isfile(binary):
@@ -349,12 +350,12 @@ def coverage(rectangles, tot_lims=None):
 	""" Add the areas of rectangles with non-zero weights. """
 
 	no_w = max(rectangles[:,1])+1
-	covperpass = np.zeros(no_w)
+	covperpass = np.zeros(int(no_w))
 
 	for rec in rectangles:
 		width = max(rec[2::2]) - min(rec[2::2])
 		height = max(rec[3::2]) - min(rec[3::2])
-		covperpass[rec[1]] += width*height
+		covperpass[int(rec[1])] += width*height
 
 	# Now get total if total limits are given
 	if tot_lims is not None:

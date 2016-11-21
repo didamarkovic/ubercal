@@ -17,7 +17,7 @@ NPOINT = 3
 NDITH = 4
 NDETX = 4
 
-def _plot_survey(inv, outv, oned, NRA=3, NDEC=3, outfile=None, colours=False, ts=None, scale=coverage.SCALE, unit=r'$\degree$'):
+def _plot_survey(inv, outv, oned, NRA=3, NDEC=3, outfile=None, colours=False, ts=None, scale=coverage.SCALE, unit=r'$\degree$', fs=20):
 	""" Make a nice plot of the dither configuration and coverage. """
 
 	fig, ax = plt.subplots(figsize=(10,10))
@@ -94,13 +94,13 @@ def _plot_survey(inv, outv, oned, NRA=3, NDEC=3, outfile=None, colours=False, ts
 	plt.xlabel(r'RA [' + unit + ']')
 	#plt.legend(forlegp, forlegc, title='# passes', bbox_to_anchor=(1.13, 1.011), framealpha=1.0, frameon=False)
 	forlegc = [str(forlegc[i])+'-pass' for i in range(len(forlegc))]
-	plt.legend(forlegp, forlegc, bbox_to_anchor=(0.45, 0.99, 0., 0.), loc='lower center', framealpha=1.0, frameon=False, ncol=4)
-	for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels()):
-	    item.set_fontsize(20)
+	leg = plt.legend(forlegp, forlegc, bbox_to_anchor=(0.0, 1.001, 1.0, 1.001), mode="expand", loc=3, borderaxespad=0.0, columnspacing=0.7, handletextpad=0.3, framealpha=1.0, frameon=False, ncol=4)
+	for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] + ax.get_xticklabels() + ax.get_yticklabels() + leg.get_texts()):
+	    item.set_fontsize(fs)
 
 	if outfile is not None:
 		if ts is None: ts = t.strftime('%s')
-		plt.savefig(outfile+"survey-" + ts +'.pdf', dpi=400, bbox_inches='tight') 
+		plt.savefig(outfile+"plotsetup-survey-" + ts +'.pdf', dpi=400, bbox_inches='tight') 
 		plt.close()
 
 	return fig, ax
@@ -159,7 +159,7 @@ def _create_survey(binary, outpath = './', pattern = 'J', size = 1.0, verb = 0, 
 		runit = False
 		print "Warning, I'm using the old .vrt files in " + outpath + ' for my polygons!'
 	if inv is None or outv is None or runit:
-		inv2, outv2 = coverage.create_euclid_patch(dithvec, OUTPATH, nra=NPOINT, ndec=NPOINT, ndetx=coverage.NDETX, binary=BINARY, verb=VERB)
+		inv2, outv2 = coverage.create_euclid_patch(dithvec, outpath, nra=NPOINT, ndec=NPOINT, ndetx=NDETX, binary=binary, verb=verb)
 	if runit:
 		os.rename(inv2, inv)
 		os.rename(outv2, outv)
@@ -186,22 +186,23 @@ def _create_survey(binary, outpath = './', pattern = 'J', size = 1.0, verb = 0, 
 
 if __name__=='__main__':
 
-	BINARY = op.join(HERE,'../bin/create-euclid-patch')
-	OUTPATH = op.join(HERE,'../outputs/')
+	BINARY = op.abspath(op.join(HERE,'../bin/create-euclid-patch'))
+	OUTPATH = op.abspath(op.join(HERE,'../outputs/'))+'/'
 	PATTERN = 'S'
-	SIZE = 1.0#7.12
+	SIZE = 1.0
 	VERB = 0
-	PLOTPATH = None#OUTPATH
-	PATTERNS = ['S', 'J', 'N', 'step', 'box', 'X']
+	PLOTPATH = OUTPATH
+	PATTERNS = ['S', 'J', 'N', 'R', 'O', 'X']
 	USEOLD = True
 
 	# Record time stamp
 	ts = t.strftime('%s')
 
 	# Set up default plotting fonts
+	fs = 15
 	font = {'family' : 'serif',
     	    'weight' : 'normal',
-        	'size'   : 16}
+        	'size'   : fs}
 	rc('font', **font)	
 	
 	# PLOT 1:
@@ -230,7 +231,7 @@ if __name__=='__main__':
 		# PLOT 1:
 		if p == PATTERN:
 			# Plot the full survey, highlight the full-coverage region
-			fig2, axes2 = _plot_survey(inv, outv, oned, NRA=NPOINT, NDEC=NPOINT, outfile=PLOTPATH, ts=ts, scale=coverage.SCALE)
+			fig2, axes2 = _plot_survey(inv, outv, oned, NRA=NPOINT, NDEC=NPOINT, outfile=PLOTPATH, ts=ts, scale=coverage.SCALE, fs=20)
 		
 		# SUBPLOT OF PLOT 2:
 		if p == PATTERN:
@@ -240,7 +241,7 @@ if __name__=='__main__':
 		
 		# Convert the pattern name if neccessary
 		p = coverage.convpat(p)
-		ax.text(origin[0]+dx*0.5, origin[1]+dy*0.3, p, family='serif', color='k', fontsize='24', horizontalalignment='center')
+		ax.text(origin[0]+dx*0.5, origin[1]+dy*0.475, p, fontsize=2*fs, family='serif', color='w', horizontalalignment='center')
 		
 		unit = "''"
 
@@ -248,15 +249,15 @@ if __name__=='__main__':
 			ax.set_ylabel(r"$\delta$ [" + unit + "]")
 			yticks = 1.0/4.0*np.arange(5)*dy
 			ax.set_yticks(origin[1] + yticks)
-			ax.set_yticklabels([str(round(t,1)) for t in yticks])
-			ax.yaxis.set_tick_params(labelsize=12)
+			ax.set_yticklabels([str(round(t,1)) for t in yticks], font)
+			#ax.yaxis.set_tick_params(labelsize=12)
 
 		if i >= axes.shape[1]*axes.shape[0]-axes.shape[1]: 
 			ax.set_xlabel(r"RA [" + unit + "]")
 			xticks = 1.0/4.0*np.arange(5)*dx
 			ax.set_xticks(origin[0] + xticks)
-			ax.set_xticklabels([str(round(t,1)) for t in xticks])
-			ax.xaxis.set_tick_params(labelsize=12)
+			ax.set_xticklabels([str(round(t,1)) for t in xticks], font)
+			#ax.xaxis.set_tick_params(labelsize=12)
 
 		ax.set_aspect('equal', adjustable='box-forced')
 		ax.set_xlim([lim_rec[0], lim_rec[0]+dx])
@@ -265,11 +266,11 @@ if __name__=='__main__':
 		i+=1
 	
 	#size = fig.get_size_inches()*fig.dpi
-	fig.legend(forlegp, forlegc, bbox_to_anchor=(0.42, 0.42, 0., 0.), loc='lower center', framealpha=1.0, frameon=False, ncol=4)
+	fig.legend(forlegp, forlegc, fontsize=fs, bbox_to_anchor=(0.45, 0.47), loc="center", borderaxespad=0.0, framealpha=1.0, frameon=False, ncol=4)
 	fig.set_size_inches(len(PATTERNS)/2 * 5.0, 9.0)
 	#plt.tight_layout()
 
 	if PLOTPATH is None:
 		plt.show()
 	else:
-		plt.savefig(PLOTPATH+"patterns-" + ts +'.pdf',dpi=400,bbox_inches='tight')
+		plt.savefig(PLOTPATH+"plotsetup-patterns-" + ts +'.eps',dpi=400,bbox_inches='tight')

@@ -175,7 +175,7 @@ def outline_strange(axes, polygons, cols='bry'):
 		elif p.nverts==5:
 			axes.plot(p.centre[0], p.centre[1], cols[2]+'.', ms=10)
 
-def read_vrt(filename, verb=True, silent=False, SCALE=DEF_SCALE):
+def read_vrt(filename, SCALE=DEF_SCALE, verb=False, silent=False):
 	""" Open the vertex file, read line by line
 		Expecting a standard format for these .vrt files => remove the unneeded info
 		Read the polygons into vertex arrays """	
@@ -208,7 +208,7 @@ def test_fullsample(vrtfile='./test-calibration/full-pointing.vrt', txtfile='./t
 		that are discarded by the code. The dashed outlines (dots in centre) are those that seem to have 
 		3 or 5 vertices (not 4), which is unexpected. """
 
-	minx, maxx, miny, maxy, npolys, polygons = read_vrt(vrtfile, SCALE=SCALE)
+	minx, maxx, miny, maxy, npolys, polygons = read_vrt(vrtfile, SCALE=SCALE, verb=False)
 
 	""" Open the file containing areas and parent polygons. 
 	Get the indices of the final polygons to only plot those. """
@@ -280,7 +280,7 @@ if __name__=="__main__":
 	elif args.vrt is "default":
 		polygons, discarded, minx, maxx, miny, maxy = test_fullsample(SCALE=DEF_SCALE)
 	else:
-		minx, maxx, miny, maxy, npolys, polygons = read_vrt(args.vrt, SCALE=DEF_SCALE ,verb=False)
+		minx, maxx, miny, maxy, npolys, polygons = read_vrt(args.vrt, SCALE=DEF_SCALE, verb=False)
 		discarded = None
 
 	# Make the plot
@@ -294,5 +294,5 @@ if __name__=="__main__":
 		plt.savefig(args.save+"plotpolys-" + ts +'.pdf',dpi=400,bbox_inches='tight') 
 		plt.close()
 	else:
-		plt.savefig(args.save+'.pdf',dpi=400,bbox_inches='tight') 
+		plt.savefig(args.save+'.eps',dpi=400,bbox_inches='tight') 
 		plt.close()

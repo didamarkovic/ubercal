@@ -42,8 +42,6 @@ def sizes_of_pattern(pattern='J', nstep=1, outpath=op.join(HERE,'outputs/'), ver
 	if np.std(np.array(tots)) < 1e-15:
 		warn("something is going wrong in the total area calculation!")
 
-	print sizes, len(covs), tot.shape
-
 	return np.array(sizes), np.array(covs)/tot
 
 def to_file(sizes, coverages, outpath, ts='', pattern=None, filename=None):
@@ -84,7 +82,7 @@ def plot(sizes, coverages, plotpath=None, pattern=None, res=500):
 	# Then prepare to interpolate
 	sizes = min(old_sizes) + (max(old_sizes)-min(old_sizes))*np.arange(res+1)/res
 	# Then plot
-	plt.figure()
+	plt.figure(figsize=(9.3, 7.5))
 	h = np.arange(ncov)
 	width = (max(sizes) - min(sizes)  + 1e-15)/(len(sizes) - 1 + 1e-15)
 	col = ['k','r','c','g','m','b','y']
@@ -105,7 +103,7 @@ def plot(sizes, coverages, plotpath=None, pattern=None, res=500):
 		plt.text(min(sizes) + xran*0.05, 0.05, coverage.convpat(pattern), family='serif', color='k', fontsize='45')
 
 	plt.axvline(l.DX_TRANSITION, color='k',ls=':')
-	plt.legend(bbox_to_anchor=(1.02, 1., 0., 0.), loc='lower right', prop={'size':12}, framealpha=1.0, frameon=False, ncol=5)
+	plt.legend(bbox_to_anchor=(-0.12, 1.03, 0., 0.), loc="lower left", prop={'size':l.FS}, frameon=False, ncol=5, borderaxespad=0.0, columnspacing=0.5, handletextpad=0.25)
 	plt.xlabel(r'step size, $d_x$ ["]'); 
 	plt.ylabel('fractions of pixels with n-passes')
 	plt.xlim([min(sizes)-0.01, max(sizes)+0.01])
@@ -115,7 +113,7 @@ def plot(sizes, coverages, plotpath=None, pattern=None, res=500):
 		plotfile = None
 		plt.show()
 	else:
-		plotfile = op.join(plotpath,"coverage" + ts +'.png')
+		plotfile = op.join(plotpath,"plotcoverage" + ts +'.eps')
 		plt.savefig(plotfile,dpi=600,bbox_inches='tight')
 
 	return plotfile
@@ -156,9 +154,9 @@ if __name__=='__main__':
 	p.add_argument("--maxsize", "-s", default=2.0, type=float, help="Max scale of dither, size=1 means d_x=50'', d_y=100''.")
 	p.add_argument("--minsize", "-m", default=0.0, type=float, help="Min scale of dither, size=1 means d_x=50'', d_y=100''.")
 	p.add_argument("--nsizes", "-n", default=2, type=int, help="Number of steps between minsize and maxsize to calculate coverage for.")
-	p.add_argument("-o", "--outpath", default=op.join(HERE,"outputs/"), help="where you want your output files and plots.")
-	p.add_argument("-c", "--srcpath", default=op.join(HERE,"ubercal/"), help="directory containing test-calibration source code")
-	p.add_argument("-b", "--bin", default=op.join(HERE,'bin/'), help="Location of binaries if no need for compilation.")
+	p.add_argument("-o", "--outpath", default=op.join(HERE,"../outputs/"), help="where you want your output files and plots.")
+	p.add_argument("-c", "--srcpath", default=op.join(HERE,"../ubercal/"), help="directory containing test-calibration source code")
+	p.add_argument("-b", "--bin", default=op.join(HERE,'../bin/'), help="Location of binaries if no need for compilation.")
 	p.add_argument("-v", "--verb", default=0, type=int, help="verbosity level. 0 for silent.")
 	p.add_argument("-d", "--display", action='store_true', help="Set flag to display plot instead of saving.")
 	p.add_argument("-r", "--res", default=500, type=int, help="Plotting resolution to interpolate sizes to.")
@@ -184,7 +182,7 @@ if __name__=='__main__':
 	target = 'create-euclid-patch'
 	binary = op.join(arg.bin,target)
 	if not op.isfile(binary):
-		binary = build(path=arg.srcpath, target=target, verb=arg.verb)
+		binary = coverage.build(path=arg.srcpath, target=target, verb=arg.verb)
 
 	# Search through the output path to see if this pattern has already been calculated
 	files = glob(op.join(arg.outpath,'coverage*.txt'))

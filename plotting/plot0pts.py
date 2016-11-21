@@ -123,5 +123,5 @@ if __name__=="__main__":
 		plt.show();
 	else:
 		ts = time.strftime('%s')
-		plt.savefig(args.cals+"/plot0pts-" + ts +'.pdf',dpi=400,bbox_inches='tight') 
+		plt.savefig(args.cals+"/plot0pts-" + ts +'.eps',dpi=400,bbox_inches='tight') 
 		plt.close()

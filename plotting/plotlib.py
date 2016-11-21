@@ -13,7 +13,7 @@ from glob import glob
 import pandas as pd
 import coverage as c
 
-FS = 14
+FS = 20
 matplotlib.rcParams.update({'font.size': FS})
 
 MINY = 0.0
@@ -32,6 +32,7 @@ MAXD = 4*np.sqrt((DETX+GAPX)**2+(DETX+GAPY)**2)
 DX_TRANSITION = NODETX*(DETX+GAPY)/(NODITH-1)/2
 #print "this: ", DX_TRANSITION
 
+ALLPATS = ["baseline", "J", "S", "X", "R", "O", "N"]
 C = {
 	'J': 'k',
 	'S': 'g',
@@ -79,10 +80,10 @@ def get_runs(outpath, rnames=0):
 	if not rnames: rnames = glob(outpath + '*')
 	if rnames == []: raise Exception("I found nothing in "+outpath)
 	
-	patterns = ["J", "S", "R", "O"]
+	patterns = ALLPATS[1:]
 	dfs = {}
 	tmp = []
-	
+
 	for rname in rnames:	
 		run = rname.split('/')[-1]
 		runs = {}
@@ -103,25 +104,22 @@ def get_runs(outpath, rnames=0):
 def get_baseline(rundir):
 
 	try:
-		cf = open(rundir + 'baseline_test.out', "r")
+		cf = open(rundir + '/baseline_test.out', "r")
 		for line in cf: pass
 		# The last line should be like: 
 		#	"Initial calibration ical[i], final calibration fcal[i]"
 		icalb = float(line.split(", ")[0].split(" ")[2]) 
 		fcalb = float(line.split(", ")[1].split(" ")[2])
 		cf.close()
-	except IOError:
-		print "No baseline comparison available."
+	except IOError as e:
+		print "No baseline comparison available: IOError:" + str(e)
 		exit(1)
-		#pattern = ["J", "O"]
-		#fcalb = 0.0123985 
-	except UnboundLocalError:
-		print "No baseline comparison available."
-		exit(1)
-		#pattern = ["J", "O"]
-		#fcalb = 0.0123985 
 
-	return fcalb/icalb
+	except UnboundLocalError as e:
+		print "No baseline comparison available: UnboundLocalError:" + str(e)
+		exit(1) 
+
+	return fcalb, icalb
 
 def load_pattern(fname):
 	fhead = ['i','d','area','ical','fcal']
@@ -166,7 +164,7 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 	plt.xlabel(r'step size, $d_x$ ["]'); 
 	plt.axvline(DX_TRANSITION, color='k', ls=':')
 	if 'baseline' in patterns:
-		baseline_y = 1.0/get_baseline(rundir)
+		baseline_y, init_y = get_baseline(rundir)
 		plt.axvline(BASELINE_x, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
 		plt.scatter(BASELINE_x, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
 	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
@@ -205,8 +203,7 @@ def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], lines
 	plt.xlabel('total distance, $D$ ["]'); 
 	#plt.axvline(np.sqrt(5*DX_TRANSITION**2), color='k',ls=':')
 	if 'baseline' in patterns:
-		baseline_y = 1.0/get_baseline(rundir)
-		print BASELINE_d
+		baseline_y, init_y = get_baseline(rundir)
 		plt.scatter(BASELINE_d, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
 		plt.axvline(BASELINE_d, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
 	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 

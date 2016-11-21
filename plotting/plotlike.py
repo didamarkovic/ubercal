@@ -54,5 +54,5 @@ if __name__=='__main__':
 		plt.show();
 	else:
 		ts = time.strftime('%s')
-		plt.savefig(args.likes+"/plotprobs-" + ts +'.png',dpi=600,bbox_inches='tight') 
+		plt.savefig(args.likes+"/plotprobs-" + ts +'.eps',dpi=600,bbox_inches='tight') 
 		plt.close()
