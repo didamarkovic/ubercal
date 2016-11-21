@@ -350,6 +350,9 @@ int main(int argc, char *argv[]) {
 
   if(VERB>0) printf("Improvement due to Ubercal, q = %g and\n", sqrt(sigmasq_init/sigmasq_final)); 
 
+  // If variation is DET-TO-DET, should divide the final scatter by root-NDETX to get the exposure-to-exposure scatter
+  if(!DET)NDETX=1;
+
   // Now calculate the true covariance between the true initial zero-points and the calibrations
   if(VERB>0){
     double cov_init_cal_diag=0.0;
@@ -364,7 +367,7 @@ int main(int argc, char *argv[]) {
   if(VERB>0) printf("Initial 0-point %g, final 0-point %g, calibrated by %g\n", mean_init, mean_final, mean_cal);
 
   printf("Initial scatter %g, final scatter %g, calibration scatter %g\n",
-   sqrt(sigmasq_init), sqrt(sigmasq_final), sqrt(sigmasq_cal));
+   sqrt(sigmasq_init)/(double)NDETX, sqrt(sigmasq_final)/(double)NDETX, sqrt(sigmasq_cal/(double)NDETX));
 
   exit(0);
 }
