@@ -233,28 +233,46 @@ def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], lines
 	plt.xlim([minx, maxx])
 	plt.ylim([MINY, MAXY])
 
-def plot_vs_nx(rundir, patterns=["J", "O", "S", "R"], dx=[0.0, 50.0], linestyles = ['-', '--'], ms=10):
-	# Open all the pattern.dat (except baseline)
-	maxx=0; minn=0
-	for p in patterns:
-		if p=='baseline': continue
+def plot_vs_nx(stats, mask, patterns=ALLPATS, lw=2):
+	""" Plot vs survey size """
 
-		fname = rundir + p + '.dat'
-		tmp = load_pattern(fname)
+	# Pull out the stats
+	x, mu_f, sig_f, d, mu_i, sig_i = stats
+
+	# Open the figure
+	fig = plt.figure()
 	
-		# Find limits for x-axis
-		if max(tmp.no_pointings_x)>maxx: maxx = max(tmp.no_pointings_x)**2
-		if min(tmp.no_pointings_x)<minn: minn = min(tmp.no_pointings_x)**2
-		
-		# Plot line for each pattern
-		for dsize, style in zip(dx,linestyles):
-			test = tmp.x_1==dsize
-			plt.plot(np.array(tmp.no_pointings_x[test]), np.array(tmp.fcal[test]), style, ms=ms)#, label=p + '-pattern: '+str(dsize)+'"'); 
-		
-	plt.xlabel('root number of pointings in survey'); 
-	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
-	plt.legend(bbox_to_anchor=(1.0, 0.3), fontsize=FS);
-	#plt.xlim([minn, maxx])
+	# Loop through the patterns in the table
+	leg = []; lab = ''
+	MINY=0.0; MAXY=0.0
+	for pat in patterns:
+
+		# If a non-pattern file snuck in - ignore it
+		if pat not in mu_f.keys(): continue
+
+		# Get the mean of the sigman... eek. It's just for the plot.
+		wmean_i = np.average(mu_i[pat][mask],weights=np.power(sig_i[pat][mask],-2))
+		wmean_f = np.average(mu_f[pat][mask],weights=np.power(sig_f[pat][mask],-2))
+		print "The mean residual zero-point scatter for " + pat + "-pattern is " + str(wmean_f) + "."
+
+		# Make the plot against the root(number of pointings)
+		plt.plot(x[mask], wmean_i+x[mask]*0, c='0.75', ls='--')
+		plt.plot(x[mask], wmean_f+x[mask]*0, c=C[pat], ls=':', label=None)
+		p, = plt.plot(x[mask], mu_f[pat][mask], c=C[pat], ls=L[pat], label=c.convpat(pat) + ": d = " + str(round(d[pat],1)), lw=lw)
+
+		# For prettification
+		leg.append(p)
+		plt.fill_between(x[mask], mu_f[pat][mask]-sig_f[pat][mask], mu_f[pat][mask]+sig_f[pat][mask], interpolate=True, facecolor='0.9', edgecolor='0.9')
+		MAXY = max(MAXY, np.max(wmean_i))
+
+	# Prettyfy
+	plt.xlim([1, max(x)])
+	plt.ylim([MINY, MAXY*1.001])
+	plt.ylabel(r'final zero-point scatter, $\sigma_f$') 
+	plt.xlabel(r'survey size, $\sqrt{N}$-pointings')
+	plt.legend(handles=leg, ncol=2, loc=1, fontsize=FS);
+
+	return fig, lab
 
 def save_or_show(seefig, fname=None, fig=None):
 
