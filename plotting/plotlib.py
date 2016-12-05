@@ -32,17 +32,28 @@ MAXD = 4*np.sqrt((DETX+GAPX)**2+(DETX+GAPY)**2)
 DX_TRANSITION = NODETX*(DETX+GAPY)/(NODITH-1)/2
 #print "this: ", DX_TRANSITION
 
-ALLPATS = ["baseline", "J", "S", "X", "R", "O", "N"]
+ALLPATS = ["baseline", "J", "R", "O", "S", "N", "X"]
 C = {
 	'J': 'k',
 	'S': 'g',
-	'X': 'r',
 	'R': 'c',
-	'step': 'c',
+	'N': 'y',
 	'O': 'm',
-	'box': 'm',
-	'N': 'y'
+	'X': 'r'
 	}
+L = {
+	'J': '-',
+	'S': '-',
+	'R': '--',
+	'N': '--',
+	'O': '-',
+	'X': '--'
+}
+# Alternative pattern names for backward compatibility
+C['box'] = C['O']
+C['step'] = C['R']
+L['box'] = L['O']
+L['step'] = L['R']
 
 def get_run(outpath, fname=0):
 
@@ -88,13 +99,14 @@ def get_runs(outpath, rnames=0):
 		run = rname.split('/')[-1]
 		runs = {}
 
+		pat = None
 		for fnm in glob(rname + "/*.dat"):
 			pat = basename(fnm).strip(".dat")
 
 			if pat in patterns:
 				runs[pat] = load_pattern(fnm)
 				tmp.append(pat)
-
+		if pat is None: continue
 		patterns = list(set(patterns) & set(tmp))
 		dfs[run] = runs
 	print "Only these patterns found in all folders: " + str(patterns)
@@ -136,6 +148,10 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 
 		ts = rundir.strip('/').split('/')[-1]
 		fname = op.join(rundir, p+'.dat')
+		if not op.isfile(fname): 
+			print('Can find the file for ' + p + ' in the ' + ts + ' run. Skip it.')
+			patterns.remove(p)
+			continue
 		tmp = load_pattern(fname)
 
 		# Find limits for x-axis
@@ -168,7 +184,7 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 		plt.axvline(BASELINE_x, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
 		plt.scatter(BASELINE_x, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
 	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
-	plt.legend(scatterpoints=1,fontsize=FS,loc=2,ncol=3, handletextpad=0);
+	plt.legend(scatterpoints=1,fontsize=FS,loc=1, ncol=1, handletextpad=0);
 	#if max(tmp.d)>(DETX+2*GAPX): 
 	#maxx = DETX+2*GAPX
 	plt.xlim([minx, maxx])
@@ -180,7 +196,12 @@ def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], lines
 	for p in patterns:
 		if p=='baseline': continue
 
-		fname = op.join(rundir,p+'.dat')
+		ts = rundir.strip('/').split('/')[-1]
+		fname = op.join(rundir, p+'.dat')
+		if not op.isfile(fname): 
+			print('Can find the file for ' + p + ' in the ' + ts + ' run. Skip it.')
+			patterns.remove(p)
+			continue
 		tmp = load_pattern(fname)
 
 		# Find limits for x-axis
@@ -207,7 +228,7 @@ def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], lines
 		plt.scatter(BASELINE_d, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
 		plt.axvline(BASELINE_d, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
 	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
-	plt.legend(scatterpoints=1, fontsize=FS, loc=2, ncol=3, handletextpad=0);
+	plt.legend(scatterpoints=1, fontsize=FS, loc=1, ncol=1, handletextpad=0);
 	if max(tmp.d)>MAXD/4.0: maxx = MAXD/4.0
 	plt.xlim([minx, maxx])
 	plt.ylim([MINY, MAXY])
