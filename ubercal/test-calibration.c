@@ -255,6 +255,7 @@ int main(int argc, char *argv[]) {
   //}
 
   // Calculate the 0-points from weighted average of deviations from the overlap mean iteratively
+  // This is just gradient descent for a very simple linear regression
   double maxstep=1e100, prev_maxstep=1e100, fluxi=0.0, fluxj=0.0, chisq=1e100, prev_chisq=2e100;
   int nstep=0; 
   double norm[nexposure+1], del[nexposure+1];
@@ -268,13 +269,14 @@ int main(int argc, char *argv[]) {
 
       // do this by checking all the exposure IDs in each overlap scanned, l
       for(int ie=0;ie<p_overlap[l].nexposure;ie++){
+        fluxi = p_overlap[l].flux_calib[ie] + new_calib[p_overlap[l].iexposure[ie]+1];
+        norm[p_overlap[l].iexposure[ie]+1] += (p_overlap[l].nexposure-1)/p_overlap[l].ssq_calib;
         // add over all the exposure pairs in l
         for(int je=0;je<p_overlap[l].nexposure;je++){
           if(ie!=je && p_overlap[l].ssq_calib>0 && p_overlap[l].ssq_calib<1e100){
-            fluxi = p_overlap[l].flux_calib[ie] + new_calib[p_overlap[l].iexposure[ie]+1];
             fluxj = p_overlap[l].flux_calib[je] + new_calib[p_overlap[l].iexposure[je]+1];
             del[p_overlap[l].iexposure[ie]+1] += (fluxi-fluxj)/2.0/p_overlap[l].ssq_calib;
-            norm[p_overlap[l].iexposure[ie]+1] += 1.0/p_overlap[l].ssq_calib;
+            
           }
         } 
       } // IE - loop over exposures in overlap l
