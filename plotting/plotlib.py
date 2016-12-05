@@ -270,36 +270,57 @@ def save_or_show(seefig, fname=None, fig=None):
 
 def get_stats(tables, dx=50.0):
 
-	# Assuming patters smae in tables (get_tables gives it):
+	# Assuming patters same in tables (get_tables gives it):
 	patterns = tables[tables.keys()[0]].keys()
 
 	# Assuming all are same length, x-axis!
-	test = tables[tables.keys()[0]][patterns[0]].x_1==dx
-	print tables[tables.keys()[0]][patterns[0]].x_1
-	print dx
+	test = (tables[tables.keys()[0]][patterns[0]].x_1 - dx)**2 < 0.01 # only precise to 1dp!!
+	if not sum(test): raise Exception("No dx = " +str(dx)+ " found!")
 	nx_vec = tables[tables.keys()[0]][patterns[0]].no_pointings_x[test]  
-	stdevs = {}
-	means = {}
+	stdevs_i = {}
+	stdevs_f = {}
+	means_i = {}
+	means_f = {}
 	td_vec={}
+	N = len(tables)
 
 	for pat in patterns:
 
-		print pat
-		mean_r = np.zeros(len(nx_vec))
-		meansq_r = mean_r*0.0 # Was asigning not copying!!!!!
-		sd_V = mean_r*0.0
-		tmp = sd_V*0.0
+		print pat + ": ",
+		mean_i = np.zeros(len(nx_vec))
+		mean_f = mean_i*0.0
+		sd_V = mean_i*0.0
+		tmp = mean_i*0.0
+		sig_isq = mean_i*0.0
+		sig_fsq = mean_i*0.0
 	
 		for key in tables.keys():
 
+			print key,
+
 			table = tables[key][pat]
-			ratio = np.array(table.fcal[test])/np.array(table.ical[test])
+			value_i = np.array(table.ical[test])
+			value_f = np.array(table.fcal[test])
 
-			mean_r += ratio/len(tables)
-			meansq_r += ratio**2/len(tables)
+			mean_i += value_i/N
+			mean_f += value_f/N
 
-		stdevs[pat] = np.sqrt(meansq_r - mean_r**2)
-		means[pat] = mean_r
-		td_vec[pat] = table.d[test][0] 
+		for key in tables.keys():
 
-	return nx_vec, means, stdevs, td_vec
+			table = tables[key][pat]
+			value_i = np.array(table.ical[test])
+			value_f = np.array(table.fcal[test])
+
+			sig_isq += (value_i - mean_i)**2/N
+			sig_fsq += (value_f - mean_f)**2/N
+
+		stdevs_i[pat] = np.sqrt(sig_isq)
+		stdevs_f[pat] = np.sqrt(sig_fsq)
+		means_i[pat] = mean_i
+		means_f[pat] = mean_f
+		td_vec[pat] = np.array(table.d[test])[0]
+
+		print ''
+
+	return nx_vec, means_f, stdevs_f, td_vec, means_i, stdevs_i
+	
