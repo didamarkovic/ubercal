@@ -65,6 +65,8 @@ long nexposure, noverlap;
 // buffer size
 const int bsz=800; 
 
+// ********************************************************************************
+// ********************************* BEGIN MAIN ***********************************
 // calibration star densities and rms from Marco - simplified version of Dida's algorithm.
 //const int NBIN_STAR_DEF=7;
 //double rms_v_DEF[7] = {0.00193, 0.00252, 0.00356, 0.00642, 0.01594, 0.04102, 0.11044};
@@ -188,15 +190,6 @@ int main(int argc, char *argv[]) {
     flux_calib[i] = 0.0; // want to store the flux density in each exposure later
     used_area[i] = 0.0;
   }
-
-  // calculate the basic stats (mean & scatter) of the initial setup
-  double mean_init=0.0, sigmasq_init=0.0;
-  for(int i=1;i<=nexposure;i++) {
-    mean_init += old_calib[i]; 
-    sigmasq_init += old_calib[i]*old_calib[i];
-  }
-  mean_init  /= (double)nexposure;
-  sigmasq_init /= (double)nexposure;
 
   // ********************************************************************************
   // set up mock flux measurements for each exposure of calibrators in overlaps
@@ -327,23 +320,51 @@ int main(int argc, char *argv[]) {
   fprintf(fout,"\n");
   fclose(fout);
 
+
   // ********************************************************************************
   // now test post-ubercal calibrations - these are the initial calibrations
   // for each exposure as stored in old_calib + the best-fit new calibrations in new_calib
 
+  // calculate the basic stats (mean & scatter) of the initial setup
+  // approach should depend on whether we are in the det-to-det or the exp-to-exp scenario
+  if(!DET)TMP=1;
+  else TMP=NDETX*NDETX;
+
+  double mean_init=0.0, sigmasq_init=0.0;
   double mean_final=0.0, sigmasq_final=0.0;
   double mean_cal=0.0, sigmasq_cal=0.0;
-  for(int i=1;i<=nexposure;i++) {
-    if(VERB>1) printf("Exposure %d, old flux %g, calibration %g, overlap mean %g\n",i,old_calib[i],new_calib[i], old_calib[i]+new_calib[i]);
-    mean_final += old_calib[i]+new_calib[i]; 
-    mean_cal += new_calib[i];
+  // Loop over full exposures  
+  for(int i=1;i<=nexposure/TMP;i++) {
+
+    // Loop over detectors and store the exposure means if this is a det-to-det run
+    if(DET){
+      old_calib[i] = 0.0; new_calib[i] = 0.0;
+      for(int d=(i-1)*TMP+1; d<=i*TMP; d++) {
+        // This may be dangerous:
+        old_calib[i] += old_calib[d];
+        new_calib[i] += new_calib[d];
+      }
+      old_calib[i] /= (double)TMP;
+      new_calib[i] /= (double)TMP;
+    }
+
+    sigmasq_init += old_calib[i]*old_calib[i];     
     sigmasq_final += (old_calib[i]+new_calib[i])*(old_calib[i]+new_calib[i]);
     sigmasq_cal += new_calib[i]*new_calib[i];
+  
+    mean_init += old_calib[i];
+    mean_final += old_calib[i]+new_calib[i]; 
+    mean_cal += new_calib[i];
+
+    if(VERB>1) printf("Exposure %d, old flux %g, calibration %g, new zero-point %g\n",i,old_calib[i],new_calib[i], old_calib[i]+new_calib[i]);
+
   }
-  mean_final /= (double)nexposure;
-  mean_cal /= (double)nexposure;
-  sigmasq_final /= (double)nexposure;
-  sigmasq_cal /= (double)nexposure;
+  mean_init  /= (double)(nexposure/TMP);
+  mean_final /= (double)(nexposure/TMP);
+  mean_cal /= (double)(nexposure/TMP);
+  sigmasq_init /= (double)(nexposure/TMP);
+  sigmasq_final /= (double)(nexposure/TMP);
+  sigmasq_cal /= (double)(nexposure/TMP);
 
   // Want "sample mean", because we only care about survey uniformity, not deviation from the correct answer!
   sigmasq_init -= mean_init*mean_init;
@@ -370,7 +391,10 @@ int main(int argc, char *argv[]) {
 
   exit(0);
 }
+// ******************************** END MAIN **************************************
+// ********************************************************************************
 
+// ********************************************************************************
 // this is the main function calculating chi^2
 double calc_chisq(double *new_calib) {
 
