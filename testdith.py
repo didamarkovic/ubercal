@@ -89,7 +89,7 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 	 
 	# At the top of result files will have
 	filehead = " with random seed = " + seed + "\n"
-	filehead += "i d area ical fcal x_1 y_1 x_2 y_2 x_3 y_3 no_pointings_x no_pointins_y frac_1_dith frac_2_dith frac_3_dit frac_4_dith"
+	filehead += "i d area ical fcal x_1 y_1 x_2 y_2 x_3 y_3 no_pointings_x no_pointins_y frac_1_dith frac_2_dith frac_3_dith frac_4_dith"
 	# Note that the first column is actually the dither factor column
 	# It is denoted by the leading # in the header
 

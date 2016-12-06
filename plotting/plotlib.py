@@ -5,25 +5,22 @@
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib
-import os.path as op
-from os.path import basename, isfile, isdir
-from glob import glob
-import pandas as pd
+import matplotlib.pyplot as plt
+import os, pandas, glob
 import coverage as c
 
 FS = 20
 matplotlib.rcParams.update({'font.size': FS})
 
 MINY = 0.0
-MAXY = 14.5
+MAXY = 0.02025
 
 # Get the baseline fcalb and icalb from the test.out file
 BASELINE_x = 50.0
 BASELINE_d = 311.8033989
 
-DETX = 612 # arcsec
+DETX = 600 # arcsec
 GAPX = 50 # arcsec 
 GAPY = 100 # arcsec
 NODETX = 4
@@ -55,40 +52,47 @@ C['step'] = C['R']
 L['box'] = L['O']
 L['step'] = L['R']
 
+def find_recent(path):
+	""" Get the most recent run. """
+	timestamp = 0
+	runs = glob.glob(path+'*')
+	for run in runs:
+		fname = os.path.basename(run)
+		irun = int(fname.split("-")[0])
+		if irun > timestamp: 
+			# Check run has finished
+			if os.path.isfile(path + fname + '/run.log'):
+				timestamp = irun
+	return fname
+
+def find_patterns(rundir, silence=False):
+	""" Find all the patterns in rundir (should contain only 1 seed). """
+	if not os.path.isdir(rundir): raise Exception("I found no such folder: " + rundir)
+
+	pattern = []
+	for fnm in glob.glob(rundir + "/*.dat"):
+		pattern.append(os.path.basename(fnm).strip(".dat")) # Get the patterns available
+
+	if not silence: print "I found these patterns: ", pattern, " in ", rundir
+	return pattern	
+
 def get_run(outpath, fname=0):
 
-	# Get the most recent run
-	if not fname:
-		timestamp = 0
-		runs = glob(outpath+'*')
-		print outpath
-		for run in runs:
-			#try:
-			fname = basename(run)
-			irun = int(fname.split("-")[0])
-			if irun > timestamp: 
-				# Check run has finished
-				if isfile(outpath + fname + '/run.log'):
-					timestamp = irun
-			#except ValueError:
-			#	pass
-		timestamp = str(timestamp)
+	# Find most recent run
+	if not fname: fname = find_recent(outpath)
 	print 'reading ' + str(fname)
 
-	rundir = outpath + str(fname) + '/'
-	if not isdir(rundir): raise Exception("I found no such folder: " + rundir)
-	pattern = []
-	for fnm in glob(rundir + "*.dat"):
-		pattern.append(basename(fnm).strip(".dat")) # Get the patterns available
-	print "I found these patterns: ", pattern, " in ", rundir
+	# Find all the patterns in the timestamp folder
+	rundir = os.path.join(outpath,str(fname))+'/'
+	patterns = find_patterns(rundir)
 
-	return rundir, pattern, str(fname)
+	return rundir, patterns, str(fname)
 
 def get_runs(outpath, rnames=0):
 	# Get the means and stdevs of several runs (hpefully many files in a dir)
 
 	print "In " + outpath + ", scanning:"
-	if not rnames: rnames = glob(outpath + '*')
+	if not rnames: rnames = glob.glob(outpath + '*')
 	if rnames == []: raise Exception("I found nothing in "+outpath)
 	
 	patterns = ALLPATS[1:]
@@ -100,11 +104,11 @@ def get_runs(outpath, rnames=0):
 		runs = {}
 
 		pat = None
-		for fnm in glob(rname + "/*.dat"):
-			pat = basename(fnm).strip(".dat")
+		for fnm in glob.glob(rname + "/*.dat"):
+			pat = os.path.basename(fnm).strip(".dat")
 
 			if pat in patterns:
-				runs[pat] = load_pattern(fnm)
+				runs[pat] = load_pattern(fnm, recalc=False)
 				tmp.append(pat)
 		if pat is None: continue
 		patterns = list(set(patterns) & set(tmp))
@@ -114,49 +118,139 @@ def get_runs(outpath, rnames=0):
 	return dfs, patterns
 
 def get_baseline(rundir):
+	tmp = load_pattern(rundir + '/baseline.dat')
+	return tmp.fcal, tmp.ical
 
-	try:
-		cf = open(rundir + '/baseline_test.out', "r")
-		for line in cf: pass
-		# The last line should be like: 
-		#	"Initial calibration ical[i], final calibration fcal[i]"
-		icalb = float(line.split(", ")[0].split(" ")[2]) 
-		fcalb = float(line.split(", ")[1].split(" ")[2])
-		cf.close()
-	except IOError as e:
-		print "No baseline comparison available: IOError:" + str(e)
-		exit(1)
+def load_pattern(fname, recalc=True):
+	""" Load the pattern from a [].dat file. Recalculate the calibrations from the calibrations.txt
+		files if recalc is requested. """
 
-	except UnboundLocalError as e:
-		print "No baseline comparison available: UnboundLocalError:" + str(e)
-		exit(1) 
+	# Don't recalculate in the exp-to-exp case - it will be wrong!
+	if recalc and ('exp' in fname or 'EXP' in fname):
+		print "Not recalculating in the exp-to-exp case!"
+		recalc = False
 
-	return fcalb, icalb
+	# Get both headers
+	with open(fname) as f:
+		head = ''.join([next(f)[2:] for i in [0,1]])[:-1]
 
-def load_pattern(fname):
+	# This is the header format that testdith.py saves in
 	fhead = ['i','d','area','ical','fcal']
 	fhead += ['x_1','y_1','x_2','y_2','x_3','y_3']
 	fhead += ['no_pointings_x','no_pointins_y']
 	fhead += ['frac_0_dith','frac_1_dith','frac_2_dith','frac_3_dith','frac_4_dith']
-	return pd.read_table(fname, sep=' ', names=fhead, skiprows=2)
 
-def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linestyles = ['-', '--']):
+	# Construct a new filename for the recalculation result and check if it has already been done
+	if recalc:
+		recalced_fname = fname[:-4]+'-recalculated.dat'
+		if os.path.isfile(recalced_fname): 
+			print "Recalculation found in " + recalced_fname + "!"
+			fname = recalced_fname
+			recalc = False
+
+	# Grab the data from the .dat file
+	df = pandas.read_table(fname, sep=' ', names=fhead, skiprows=2)
+
+	# Re-calculate the calibration stats if it is requested and not found yet
+	if recalc:
+
+			# Replace the columns with the new calculations
+			dx, df['ical'], df['fcal'] = calibrations_stats(fname[:-4])
+
+			# Save into a new file and return
+			np.savetxt(recalced_fname, df, fmt='%.6f', header=head)
+
+	return df
+
+def calibrations_stats(path, silence=False):
+	""" Call calibration_stats for all the dither configurations in the pattern. """
+
+	# Baseline has no folder:
+	if 'baseline' in path:
+		baseline = True
+		path = os.path.dirname(path)
+		paths = glob.glob(path+'/calibrations.txt')
+	else:
+		baseline = False
+		paths = glob.glob(path+'/*/calibrations.txt')
+
+	# Find all the calibrations.txt files in the given path
+	if len(paths)==0: 
+		raise Exception('No calibrations.txt files found in '+ path + '!')
+
+	sigma_i = np.ones(len(paths))*np.inf
+	sigma_f = np.ones(len(paths))*np.inf
+	dithersizes = np.zeros(len(paths))
+	for i,file in enumerate(paths):
+
+		# Grab the dither size from the filename
+		if baseline:
+			dithersizes[i] = BASELINE_x
+		else:
+			dithersizes[i] = float(file.split('/')[-2][11:])
+		if not silence: print 'recalculating dx = ' + str(dithersizes[i])
+		
+		# Get the fov configuration from the header
+		with open(file) as f:
+			headline = next(f)
+		N1, N2 = headline[39:-10].split('x')
+		N = int(N1)*int(N2)
+
+		# The columns are:
+		# exposure-id initial-zero-point mean-measured-flux used-area calibration-correction calibrated-zero-point
+		data = np.loadtxt(file)
+
+		if 'exp' not in headline:
+			# Extract the sigma_i, sigma_f from the given calibrations.txt file.
+			# Loop over fovs
+			nexp = int(len(data)/N)
+			newdata = np.zeros([nexp,2])
+
+			# This loop is very slow
+			for alpha in range(nexp):
+				newdata[alpha,0] = np.mean(data[alpha*N:(alpha+1)*N,1])
+				newdata[alpha,1] = np.mean(data[alpha*N:(alpha+1)*N,5])
+
+			sigma_i[i] = np.std(newdata[:,0]) 
+			sigma_f[i] = np.std(newdata[:,1])
+		else:
+			sigma_i[i] = np.std(data[:,1]) 
+			sigma_f[i] = np.std(data[:,5])
+
+	# Sort in increasing dithersize
+	index = np.argsort(dithersizes)
+
+	return dithersizes[index], sigma_i[index], sigma_f[index]
+
+def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linestyles = ['-', '--'], vsd=False):
+
+	# Whether to plot against dx or total d:
+	if vsd:
+		baseline = BASELINE_d
+	else:
+		baseline = BASELINE_x
+
 	# Open all the pattern.dat (except baseline)
 	maxx=0; minx=float('inf')
 	for p in patterns:
 		if p=='baseline': continue
 
 		ts = rundir.strip('/').split('/')[-1]
-		fname = op.join(rundir, p+'.dat')
-		if not op.isfile(fname): 
+		fname = os.path.join(rundir, p+'.dat')
+		if not os.path.isfile(fname): 
 			print('Can find the file for ' + p + ' in the ' + ts + ' run. Skip it.')
 			patterns.remove(p)
 			continue
 		tmp = load_pattern(fname)
 
+		if vsd:
+			ordinate = tmp.d
+		else:
+			ordinate = tmp.x_1
+
 		# Find limits for x-axis
-		if max(tmp.x_1)>maxx: maxx = max(tmp.x_1)
-		if min(tmp.x_1)<minx: minx = min(tmp.x_1)
+		if max(ordinate)>maxx: maxx = max(ordinate)
+		if min(ordinate)<minx: minx = min(ordinate)
 
 		# Plot line for each pattern
 		for npoint, style in zip(plotssize,linestyles):
@@ -169,69 +263,24 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 					print "Plotting npoint="+str(int(npoint))+" instead."
 			else:
 				test = range(len(tmp))
-			plt.plot(tmp.x_1[test], np.array(tmp.fcal[test]), style, 
+			plt.plot(ordinate[test], np.array(tmp.fcal[test]), style, 
 					 label = c.convpat(p) + r': '+str(int(npoint))+'x'+str(int(npoint)), c=C[p], lw=2); 
-			#plt.plot(tmp.x_1[test], 1 - tmp.frac_1_dith[test] - tmp.frac_2_dith[test] - tmp.frac_3_dith[test] - tmp.frac_4_dith[test], '--', label='0-pass coverage'); 
-			#plt.plot(tmp.x_1[test], tmp.frac_1_dith[test], ':', label='1-pass coverage'); 
-			#plt.plot(tmp.x_1[test], tmp.frac_2_dith[test], ':', label='2-pass coverage'); 
-			#plt.plot(tmp.x_1[test], tmp.frac_3_dith[test], '--', label='3-pass coverage'); 
-			#plt.plot(tmp.x_1[test], tmp.frac_4_dith[test], '--', label='4-pass coverage'); 
 
 	plt.xlabel(r'step size, $d_x$ ["]'); 
-	plt.axvline(DX_TRANSITION, color='k', ls=':')
+	if not vsd: plt.axvline(DX_TRANSITION, color='k', ls=':')
 	if 'baseline' in patterns:
 		baseline_y, init_y = get_baseline(rundir)
-		plt.axvline(BASELINE_x, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
-		plt.scatter(BASELINE_x, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
+		plt.axvline(baseline, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
+		plt.scatter(baseline, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
 	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
-	plt.legend(scatterpoints=1,fontsize=FS,loc=1, ncol=1, handletextpad=0);
-	#if max(tmp.d)>(DETX+2*GAPX): 
-	#maxx = DETX+2*GAPX
+	plt.legend(scatterpoints=1,fontsize=FS, loc=1, ncol=1, handletextpad=0, labelspacing=0.25);
+	if vsd and max(tmp.d)>MAXD/4.0: maxx = MAXD/4.0
 	plt.xlim([minx, maxx])
 	plt.ylim([MINY, MAXY])
 
 def plot_vs_d(rundir, patterns=["J", "O", "S", "R"], plotssize = [20, 19], linestyles = ['-', '--']):
-	# Open all the pattern.dat (except baseline)
-	maxx=0; minx=float('inf')
-	for p in patterns:
-		if p=='baseline': continue
-
-		ts = rundir.strip('/').split('/')[-1]
-		fname = op.join(rundir, p+'.dat')
-		if not op.isfile(fname): 
-			print('Can find the file for ' + p + ' in the ' + ts + ' run. Skip it.')
-			patterns.remove(p)
-			continue
-		tmp = load_pattern(fname)
-
-		# Find limits for x-axis
-		if max(tmp.d)>maxx: maxx = max(tmp.d)
-		if min(tmp.d)<minx: minx = min(tmp.d)
-		
-		# Plot line for each pattern
-		for npoint, style in zip(plotssize,linestyles):
-			if npoint is not None: 
-				test = tmp.no_pointings_x == npoint
-				if np.sum(test)==0: 
-					print "No runs with "+str(int(npoint))+" pointings found in "+rundir+"!",
-					npoint = min(tmp.no_pointings_x-npoint)+npoint
-					test = tmp.no_pointings_x == npoint
-					print "Plotting npoint="+str(int(npoint))+" instead."
-			else:
-				test = range(len(tmp))
-			plt.plot(tmp.d[test], np.array(tmp.fcal[test]), style, label=c.convpat(p) + r': '+str(int(npoint))+'x'+str(int(npoint)), c=C[p], lw=2); 
-		
-	plt.xlabel('total distance, $D$ ["]'); 
-	#plt.axvline(np.sqrt(5*DX_TRANSITION**2), color='k',ls=':')
-	if 'baseline' in patterns:
-		baseline_y, init_y = get_baseline(rundir)
-		plt.scatter(BASELINE_d, baseline_y, marker = "o", s = 50, c=C['J'], label="Laureijs et al. (2011)", zorder=len(patterns))
-		plt.axvline(BASELINE_d, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
-	plt.ylabel(r'final zero-point scatter, $\sigma_f$'); 
-	plt.legend(scatterpoints=1, fontsize=FS, loc=1, ncol=1, handletextpad=0);
-	if max(tmp.d)>MAXD/4.0: maxx = MAXD/4.0
-	plt.xlim([minx, maxx])
-	plt.ylim([MINY, MAXY])
+	""" Only for backward compatibility. """
+	plot_vs_x(rundir, patterns, plotssize, linestyles, vsd=True)
 
 def plot_vs_nx(stats, mask, patterns=ALLPATS, lw=2):
 	""" Plot vs survey size """
@@ -250,7 +299,7 @@ def plot_vs_nx(stats, mask, patterns=ALLPATS, lw=2):
 		# If a non-pattern file snuck in - ignore it
 		if pat not in mu_f.keys(): continue
 
-		# Get the mean of the sigman... eek. It's just for the plot.
+		# Get the mean of the sigma... eek. It's just for the plot.
 		wmean_i = np.average(mu_i[pat][mask],weights=np.power(sig_i[pat][mask],-2))
 		wmean_f = np.average(mu_f[pat][mask],weights=np.power(sig_f[pat][mask],-2))
 		print "The mean residual zero-point scatter for " + pat + "-pattern is " + str(wmean_f) + "."
@@ -341,4 +390,30 @@ def get_stats(tables, dx=50.0):
 		print ''
 
 	return nx_vec, means_f, stdevs_f, td_vec, means_i, stdevs_i
-	
+
+def find_seedfolders(inpath, tss=[]):
+	""" Find the folders that contain a seed each with all the patterns in them."""
+
+	# Find all the right directories
+	# http://stackoverflow.com/questions/2186525/use-a-glob-to-find-files-recursively-in-python
+	ignoredirs = ['.git', 'mangle', 'bin', 'plotting', 'samples'] + ALLPATS
+	foundtss = []
+	for root, dirnames, filenames in os.walk(inpath):
+		if 'run.log' in filenames: foundtss.append(root)
+		for igdir in ignoredirs:
+			if igdir in dirnames: dirnames.remove(igdir)
+	if len(foundtss)==0: raise Exception('No ubercal run results found in ' + inpath + '!')
+
+	# If a list of timestamps is given to plot, make sure we've found all of them and save paths
+	if len(tss)>0:
+		tspaths=[]
+		for ts in tss:
+			for fts in foundtss:
+				if ts in fts:
+					tspaths.append(fts)
+					tss.remove(ts)
+		if len(tss)>0: print "Warning: we didn't find the following timestamps in the path you gave: " + ', '.join(tss)
+	else:
+		tspaths = foundtss
+
+	return tspaths
