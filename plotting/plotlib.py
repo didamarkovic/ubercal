@@ -244,7 +244,10 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 		tmp = load_pattern(fname)
 
 		if vsd:
-			ordinate = tmp.d
+			if p is 'X':
+				ordinate = tmp.d/2
+			else:				
+				ordinate = tmp.d
 		else:
 			ordinate = tmp.x_1
 
@@ -266,8 +269,11 @@ def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linesty
 			plt.plot(ordinate[test], np.array(tmp.fcal[test]), style, 
 					 label = c.convpat(p) + r': '+str(int(npoint))+'x'+str(int(npoint)), c=C[p], lw=2); 
 
-	plt.xlabel(r'step size, $d_x$ ["]'); 
-	if not vsd: plt.axvline(DX_TRANSITION, color='k', ls=':')
+	if not vsd: 
+		plt.axvline(DX_TRANSITION, color='k', ls=':')
+		plt.xlabel(r'step size, $d_x$ ["]'); 
+	else:
+		plt.xlabel(r'total dither distance, $D$ ["]'); 		
 	if 'baseline' in patterns:
 		baseline_y, init_y = get_baseline(rundir)
 		plt.axvline(baseline, ymin=0, ymax=(baseline_y-MINY)/(MAXY-MINY), ls='--', c=C['J'], lw=2, zorder=len(patterns))
