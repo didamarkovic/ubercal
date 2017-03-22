@@ -295,13 +295,13 @@ if __name__=='__main__':
 	# These should be a non-mutually exclusive group:
 	parser.add_argument("-x", "--xmax", type=float, default=50.0, help="x-displatement of first dither")
 	parser.add_argument("-y", "--ymax", type=float, default=None, help="y-displatement of first dither")
-	parser.add_argument("-p", "--patterns", nargs='+', default=PATTERNS, help="dithering patterns to test: implemented: J, step, S, box")
+	parser.add_argument("-p", "--patterns", nargs='+', default=PATTERNS, help="dithering patterns to test: implemented: J, R, S, N, X, O")
 	parser.add_argument("-s", "--seed", type=int, default='-'+ts, help="random seed for stellar density")
 	parser.add_argument("-nx", type=int, default=3, help="number of pointins in survey in x-direction (RA)")
 	parser.add_argument("-ny", type=int, default=None, help="number of pointins in survey in y-direction (dec)")
 
 	# These in principle work together, so don't have to be mutually exclusive
-	parser.add_argument("-a", "--surveys", type=int, default=None, help="how many survey sizes to test")
+	parser.add_argument("-a", "--nsurveys", type=int, default=None, help="how many survey sizes to test")
 	parser.add_argument("-n", "--nsizes", type=int, default=1, help="number of pattern sizes to run (max set by xmax argument)")
 
 	parser.add_argument("-o", "--outpath", default=thispath, help="where you want or have your 'outputs' folder")
@@ -317,7 +317,7 @@ if __name__=='__main__':
 	args = parser.parse_args()
 	
 	# Set the missing redundant settings:
-	if not args.surveys == None: 
+	if not args.nsurveys == None:
 		args.mode = 'area'
 	elif (args.nsizes or args.xmax or args.ymax or args.patterns or args.seed) and args.mode=='test':
 		args.mode = 'producion'	
@@ -326,40 +326,42 @@ if __name__=='__main__':
 	if args.compile: ubercal.compile(os.path.abspath(args.compile))
 	
 	# Make directory structure for outputs for this run
-	makedir = False
 
-	# Check if given outputs directory or parent
+	# Create the name for the outputs directory and create it if it does not exist
 	if 'outputs' != os.path.basename(os.path.normpath(args.outpath)):
-		rundir = os.path.abspath(os.path.join(args.outpath, 'outputs/', str(abs(args.seed))))
+		outdir = os.path.abspath(os.path.join(args.outpath, 'outputs/'))
 	else:
-		rundir = os.path.abspath(os.path.join(args.outpath, str(abs(args.seed))))
-	
-	# Create missing outputs directory if needed as well as one for hte given seed from the timestamp
-	if not os.path.isdir(os.path.dirname(rundir)):
-		call(['mkdir', os.path.dirname(rundir)])
-		call(['mkdir', rundir])
-		if args.verbose: print "Created " + os.path.dirname(rundir) + " and in it " + os.path.basename(rundir) + "."
-		makedir = True
+		outdir = os.path.abspath(args.outpath)
+	if not os.path.isdir(outdir):
+		os.makedirs(outdir)
+		if args.verbose: print "Created " + os.path.dirname(rundir),
 
-	# If only the given seed has no directory, create one from the timestamp
-	elif not os.path.isdir(rundir):
-		call(['mkdir', rundir])
-		if args.verbose: print "Created " + rundir
-		makedir = True
+	# Name the directory for this run (i.e. this seed) and create it if it doesn't exist
+	rundir = os.path.join(outdir, str(abs(args.seed)))
+	if not os.path.isdir(rundir):
+		os.makedirs(rundir)
+		if args.verbose: print " and in it " + os.path.basename(rundir) + "."
+	else:
+		if args.verbose: print "."
 
 	# Save the configuration explicitly (no INTERRUPTED at end):
-	config_file = config_file(args.patterns)
-	if args.carryon: 
-		f = open(os.path.join(rundir, config_file),'a')
-		if not makedir:
-			print "... CONTINUING INTERRUPTED RUN " + str(args.seed) + "."
-			f.write("\n\n... CONTINUE THE RUN\n# This run was restarted.\n")
-		else:
-			print "You say I should CONTINUE AN INTERRUPTED RUN, but there is no evidence of any previous results from seed " + str(args.seed) + "!"
-			print "\t => starting from scratch."
+	config_file = os.path.join(rundir, config_file(args.patterns))
+	if args.carryon and os.path.isfile(config_file): 
+		f = open(config_file,'a')
+		print "... CONTINUING INTERRUPTED RUN " + str(args.seed) + "."
+		f.write("\n\n... CONTINUE THE RUN\n# This run was restarted.\n")
+	elif os.path.isfile(config_file):
+		raise Exception("The run already exists in\n\t"+rundir+\
+					    "\nIf you'd like to continue it, use the -f flag.")
+	elif args.carryon:
+		print "You say I should CONTINUE AN INTERRUPTED RUN, but there is no evidence of any" +\
+			  "previous results from seed " + str(args.seed) + "!"
+		print "\t => starting from scratch."
+		f = open(config_file,'w')
 	else:
-		f = open(os.path.join(rundir, config_file),'w')
+		f = open(config_file,'w')
 	
+	# Write run metadata into the opened configuration file
 	f.write("# Run " + ts + " has configuration:\n")
 	for arg, value in sorted(vars(args).items()):
 		f.write(str(arg) + '=' + str(value) + '\n')
@@ -368,7 +370,7 @@ if __name__=='__main__':
 	exitcode=0
 	try:
 		[ts, fn] = test_dithers(dx=args.xmax,pattern=args.patterns, NX = args.nx, NY = args.ny, 
-			nsur = args.surveys, totcals=args.nsizes, mode=args.mode, seed=str(args.seed), dy=args.ymax, 
+			nsur = args.nsurveys, totcals=args.nsizes, mode=args.mode, seed=str(args.seed), dy=args.ymax, 
 			verb=args.verbose, rundir=rundir, calipath=os.path.abspath(args.calipath), 
 			starfile=os.path.abspath(args.starpath), cont=args.carryon, detbool=args.detbool, ftol=args.ftol)
 	except:
