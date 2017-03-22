@@ -346,10 +346,12 @@ if __name__=='__main__':
 
 	# Save the configuration explicitly (no INTERRUPTED at end):
 	config_file = os.path.join(rundir, config_file(args.patterns))
+	head = ""
+	mode = "w"
 	if args.carryon and os.path.isfile(config_file): 
-		f = open(config_file,'a')
+		mode = "a"
 		print "... CONTINUING INTERRUPTED RUN " + str(args.seed) + "."
-		f.write("\n\n... CONTINUE THE RUN\n# This run was restarted.\n")
+		head += "\n\n# ... CONTINUE THE RUN ..."
 	elif os.path.isfile(config_file):
 		raise Exception("The run already exists in\n\t"+rundir+\
 					    "\nIf you'd like to continue it, use the -f flag.")
@@ -357,29 +359,41 @@ if __name__=='__main__':
 		print "You say I should CONTINUE AN INTERRUPTED RUN, but there is no evidence of any" +\
 			  "previous results from seed " + str(args.seed) + "!"
 		print "\t => starting from scratch."
-		f = open(config_file,'w')
-	else:
-		f = open(config_file,'w')
+
+	with open(config_file,mode) as f:
 	
-	# Write run metadata into the opened configuration file
-	f.write("# Run " + ts + " has configuration:\n")
-	for arg, value in sorted(vars(args).items()):
-		f.write(str(arg) + '=' + str(value) + '\n')
+		# Write run metadata into the opened configuration file
+		f.write(head+"# Run " + ts + " has configuration:\n")
+		for arg, value in sorted(vars(args).items()):
+			f.write(str(arg) + '=' + str(value) + '\n')
 	
-	# Now run:
-	exitcode=0
-	try:
-		[ts, fn] = test_dithers(dx=args.xmax,pattern=args.patterns, NX = args.nx, NY = args.ny, 
-			nsur = args.nsurveys, totcals=args.nsizes, mode=args.mode, seed=str(args.seed), dy=args.ymax, 
-			verb=args.verbose, rundir=rundir, calipath=os.path.abspath(args.calipath), 
-			starfile=os.path.abspath(args.starpath), cont=args.carryon, detbool=args.detbool, ftol=args.ftol)
-	except:
-		tb = traceback.format_exc()
-		f.write("\n...INTERRUPTED due to:\n" + tb)
-		print "RUN WAS INTERRUPTED... Config and traceback saved to " + os.path.join(rundir, config_file) + ".\n\t" + tb.splitlines()[-1]
-		exitcode=1
-	else:
-		print "Run " + ts + " is finished, configuration saved to " + config_file + ", log in " + os.path.basename(fn) + "."
-	finally:
-		f.close()
-		exit(exitcode)
+		# Now run:
+		exitcode=0
+		try:
+			[ts, fn] = test_dithers(dx=args.xmax,
+									pattern=args.patterns, 
+									NX = args.nx, 
+									NY = args.ny, 
+									nsur = args.nsurveys, 
+									totcals=args.nsizes, 
+									mode=args.mode, 
+									seed=str(args.seed), 
+									dy=args.ymax, 
+									verb=args.verbose, 
+									rundir=rundir, 
+									calipath=os.path.abspath(args.calipath), 
+									starfile=os.path.abspath(args.starpath), 
+									cont=args.carryon, 
+									detbool=args.detbool, 
+									ftol=args.ftol)
+		except:
+			tb = traceback.format_exc()
+			f.write("\n#...INTERRUPTED due to:\n" + tb)
+			print "RUN WAS INTERRUPTED... Config and traceback saved to " + \
+				  os.path.join(rundir, config_file) + ".\n\t" + tb.splitlines()[-1]
+			exitcode=1
+
+	print "Run " + ts + " is finished, configuration saved to " + config_file + ", log in " \
+	      + os.path.basename(fn) + "."
+	exit(exitcode)
+
