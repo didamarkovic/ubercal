@@ -364,7 +364,7 @@ if __name__=='__main__':
 	parser.add_argument("-ny", type=int, default=None, help="number of pointins in survey in y-direction (dec)")
 
 	# These in principle work together, so don't have to be mutually exclusive
-	parser.add_argument("-a", "--nsurveys", type=int, default=None, help="how many survey sizes to test")
+	parser.add_argument("-a", "--nsurveys", type=int, default=1, help="how many survey sizes to test")
 	parser.add_argument("-b", "--nseeds", type=int, default=1, help="how many seed to run for better stats")
 	parser.add_argument("-n", "--nsizes", type=int, default=1, help="number of pattern sizes to run (max set by xmax argument)")
 
@@ -381,7 +381,7 @@ if __name__=='__main__':
 	args = parser.parse_args()
 	
 	# Set the missing redundant settings:
-	if not args.nsurveys == None:
+	if args.nsurveys>1:
 		args.mode = 'area'
 	elif (args.nsizes or args.xmax or args.ymax or args.patterns or args.seed) and args.mode=='test':
 		args.mode = 'producion'	
