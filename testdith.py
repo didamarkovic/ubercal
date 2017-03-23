@@ -365,6 +365,7 @@ if __name__=='__main__':
 
 	# These in principle work together, so don't have to be mutually exclusive
 	parser.add_argument("-a", "--nsurveys", type=int, default=None, help="how many survey sizes to test")
+	parser.add_argument("-b", "--nseeds", type=int, default=1, help="how many seed to run for better stats")
 	parser.add_argument("-n", "--nsizes", type=int, default=1, help="number of pattern sizes to run (max set by xmax argument)")
 
 	parser.add_argument("-o", "--outpath", default=thispath, help="where you want or have your 'outputs' folder")
@@ -387,6 +388,10 @@ if __name__=='__main__':
 
 	# Compile first, before looping 
 	if args.compile: ubercal.compile(os.path.abspath(args.compile))
+
+	# Generate seed list
+	if args.nseeds == 1: seeds = [args.seed]
+	else: seeds = -1*np.arange(args.nseeds).astype(int) - int(TS)
 	
 	# Make directory structure for outputs for this run
 
@@ -399,9 +404,10 @@ if __name__=='__main__':
 		os.makedirs(outdir)
 		if args.verbose: print "Created " + os.path.dirname(rundir),
 
-	# Run the test for seed
-	rundir = os.path.join(outdir, str(abs(s)))
-	exitcode = run(args, args.patterns, rundir, str(s), args.carryon, args.verbose)
+	# Run the test once for each seed
+	for s in seeds:
+		rundir = os.path.join(outdir, str(abs(s)))
+		exitcode = run(args, args.patterns, rundir, str(s), args.carryon, args.verbose)
 	
 	# Exit
 	exit(exitcode)
