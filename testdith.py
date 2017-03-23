@@ -358,7 +358,7 @@ if __name__=='__main__':
 	# These should be a non-mutually exclusive group:
 	parser.add_argument("-x", "--xmax", type=float, default=50.0, help="x-displatement of first dither")
 	parser.add_argument("-y", "--ymax", type=float, default=None, help="y-displatement of first dither")
-	parser.add_argument("-p", "--patterns", nargs='+', default=PATTERNS, help="dithering patterns to test: implemented: J, R, S, N, X, O")
+	parser.add_argument("-p", "--patterns", nargs='+', default=PATTERNS, help="dithering patterns to test: implemented: J, Jsq, R, S, Ssq, N, X, O")
 	parser.add_argument("-s", "--seed", type=int, default='-'+TS, help="random seed for stellar density (ignored if -b > 1")
 	parser.add_argument("-nx", type=int, default=3, help="number of pointins in survey in x-direction (RA)")
 	parser.add_argument("-ny", type=int, default=None, help="number of pointins in survey in y-direction (dec)")

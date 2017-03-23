@@ -29,10 +29,12 @@ MAXD = 4*np.sqrt((DETX+GAPX)**2+(DETX+GAPY)**2)
 DX_TRANSITION = NODETX*(DETX+GAPY)/(NODITH-1)/2
 #print "this: ", DX_TRANSITION
 
-ALLPATS = ["baseline", "J", "R", "O", "S", "N", "X"]
+ALLPATS = ["baseline", "J", "Jsq", "R", "O", "S", "Ssq", "N", "X"]
 C = {
 	'J': 'k',
 	'S': 'g',
+	'Jsq': 'k',
+	'Ssq': 'g',
 	'R': 'c',
 	'N': 'y',
 	'O': 'm',
@@ -41,6 +43,8 @@ C = {
 L = {
 	'J': '-',
 	'S': '-',
+	'Jsq': '-',
+	'Ssq': '-',
 	'R': '--',
 	'N': '--',
 	'O': '-',

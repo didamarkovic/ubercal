@@ -28,12 +28,16 @@ def getpat(pattern_name='S', dx=50, dy=100):
 	# 	it is in arcsec (n.b. one CCD is 2040 pixel = 612", gap about 50", 100")
 	if pattern_name=="J":
 		end_dithers = np.array([[dx,dy],[0.0,dy],[0.0,dy]])
+	elif pattern_name=="Jsq":
+		end_dithers = np.array([[2.*dx,dy],[0.0,dy],[0.0,dy]])
 	elif pattern_name=="O" or pattern_name=="box":
 		end_dithers = np.array([[dx,0.0],[0.0,dy],[-dx,0.0]])
 	elif pattern_name=="R" or pattern_name=="step":
 		end_dithers = np.array([[dx,dy],[dx,0.0],[dx,0.0]])
 	elif pattern_name=="S":
 		end_dithers = np.array([[dx,dy],[0.0,dy],[dx,dy]])
+	elif pattern_name=="Ssq":
+		end_dithers = np.array([[2.*dx,dy],[0.0,dy],[2.*dx,dy]])
 	elif pattern_name=="X":
 		end_dithers = np.array([[dx,dy],[0.0,0.0],[-dx,-dy]])
 	elif pattern_name=="N":
