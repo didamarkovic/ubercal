@@ -26,31 +26,31 @@ final_file = 'run.log'
 #config_file = 'config.ini'
 
 # Get timestamp for this run
-ts = get_timestamp()
+TS = get_timestamp()
 
 # Default patterns to test
 PATTERNS = ["J", "S"]	
 
 ###############################################
 
-def config_file(pats):
+def config_filename(pats):
 	fnm = 'config'
 	for pat in pats: fnm += "-" + pat
 	return fnm + '.ini'
 
 def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=None, mode='test', \
-				 seed=None, dy=None, verb=False, rundir=os.path.join(thispath, 'outputs/', ts), \
+				 seed=None, dy=None, verb=False, rundir=os.path.join(thispath, 'outputs/', TS), \
 				 calipath=os.path.join(thispath,'bin'), starfile=os.path.join(thispath,'samples/stars.dat'),
 				 cont=False, detbool=ubercal.DETBOOL, ftol=ubercal.FTOL):
 
 	if cont: 
 		timestamp = seed
 	else:
-		timestamp = ts
+		timestamp = TS
 	
 	# If seed has been input, see if there is a run with that seed already
 	# 	Should really also check the config is the same!!!: dump pars in run.log
-	if not seed or seed=='None': seed = ts
+	if not seed or seed=='None': seed = TS
 	if int(seed) > 0: seed = "-"+seed
 	if verb: print "Running with seed = " + seed + "."
 	if not NY: NY = NX
@@ -186,18 +186,18 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 					else:
 						skippatch = False
 
-					if not skippatch and not os.path.isfile(os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')):
-						
-						if verb: print '\n-- No patch file patch-'+str(new_dithers[0,0])+'.out found. Creating it now in ' + outdir + '.'
-						
+					# Read or create survey geometry files
+					patchfile = os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')
+					if skippatch:
+						try:
+							area, frac = ubercal.dith.get_area(patchfile, verb)
+						except:
+							skippatch = False
+					if not skippatch:				
 						# Run Will's code to create the survey files
-						area, frac = ubercal.dith.create_surveypatch(new_dithers.flatten(), nx, ny, calipath, outdir, patchfile, verb)
-
-					elif os.path.isfile(os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')):
-						
-						patchfile = os.path.join(outdira, 'patch-'+str(new_dithers[0,0])+'.out')
-
-						area, frac = ubercal.dith.get_area(patchfile, verb)
+						area, frac = ubercal.dith.create_surveypatch(new_dithers.flatten(), 
+																	 nx, ny, calipath, outdir, 
+																	 patchfile, verb)						
 
 					### Test calibration
 
@@ -277,6 +277,69 @@ def test_dithers(dx=50.0, pattern=PATTERNS, NX=3, NY=None, nsur = None, totcals=
 	return timestamp, os.path.join(rundir,final_file)
 
 
+def run(args, patterns, rundir, seed='-'+TS, carryon=False, verbose=False):
+
+	# Name the directory for this run (i.e. this seed) and create it if it doesn't exist
+	if not os.path.isdir(rundir):
+		os.makedirs(rundir)
+		if verbose: print " and in it " + os.path.basename(rundir) + "."
+	else:
+		if verbose: print "."
+
+	# Save the configuration
+	config_file = os.path.join(rundir, config_filename(patterns))
+	head = ""
+	mode = "w"
+	if carryon and os.path.isfile(config_file): 
+		mode = "a"
+		print "... CONTINUING INTERRUPTED RUN " + str(seed) + "."
+		head += "\n\n# ... CONTINUE THE RUN ..."
+	elif os.path.isfile(config_file):
+		raise Exception("The run already exists in\n\t"+rundir+\
+					    "\nIf you'd like to continue it, use the -f flag.")
+	elif carryon:
+		print "You say I should CONTINUE AN INTERRUPTED RUN, but there is no evidence of any " +\
+			  "previous results from seed " + str(seed) + "!"
+		print "\t => starting from scratch."
+
+	with open(config_file,mode) as f:
+	
+		# Write run metadata into the opened configuration file
+		f.write(head+"# Run " + seed[1:] + " has configuration:\n")
+		for arg, value in sorted(vars(args).items()):
+			f.write(str(arg) + '=' + str(value) + '\n')
+	
+		# Now run:
+		exitcode=0
+		try:
+			[ts, fn] = test_dithers(dx=args.xmax,
+									pattern=patterns, 
+									NX = args.nx, 
+									NY = args.ny, 
+									nsur = args.nsurveys, 
+									totcals=args.nsizes, 
+									mode=args.mode, 
+									seed=str(seed), 
+									dy=args.ymax, 
+									verb=args.verbose, 
+									rundir=rundir, 
+									calipath=os.path.abspath(args.calipath), 
+									starfile=os.path.abspath(args.starpath), 
+									cont=args.carryon, 
+									detbool=args.detbool, 
+									ftol=args.ftol)
+		except:
+			tb = traceback.format_exc()
+			f.write("\n#...INTERRUPTED due to:\n" + tb)
+			print "RUN WAS INTERRUPTED... Config and traceback saved to " + \
+				  os.path.join(rundir, config_file) + ".\n\t" + tb.splitlines()[-1]
+			exitcode=1
+		else:
+			print "Run " + seed[1:] + " is finished, configuration saved to " + config_file +\
+				  ", log in " + os.path.basename(fn) + "."
+
+	return exitcode
+
 ######################################################### MAIN ############################################
 if __name__=='__main__':
 	import argparse
@@ -296,7 +359,7 @@ if __name__=='__main__':
 	parser.add_argument("-x", "--xmax", type=float, default=50.0, help="x-displatement of first dither")
 	parser.add_argument("-y", "--ymax", type=float, default=None, help="y-displatement of first dither")
 	parser.add_argument("-p", "--patterns", nargs='+', default=PATTERNS, help="dithering patterns to test: implemented: J, R, S, N, X, O")
-	parser.add_argument("-s", "--seed", type=int, default='-'+ts, help="random seed for stellar density")
+	parser.add_argument("-s", "--seed", type=int, default='-'+TS, help="random seed for stellar density (ignored if -b > 1")
 	parser.add_argument("-nx", type=int, default=3, help="number of pointins in survey in x-direction (RA)")
 	parser.add_argument("-ny", type=int, default=None, help="number of pointins in survey in y-direction (dec)")
 
@@ -336,64 +399,9 @@ if __name__=='__main__':
 		os.makedirs(outdir)
 		if args.verbose: print "Created " + os.path.dirname(rundir),
 
-	# Name the directory for this run (i.e. this seed) and create it if it doesn't exist
-	rundir = os.path.join(outdir, str(abs(args.seed)))
-	if not os.path.isdir(rundir):
-		os.makedirs(rundir)
-		if args.verbose: print " and in it " + os.path.basename(rundir) + "."
-	else:
-		if args.verbose: print "."
-
-	# Save the configuration explicitly (no INTERRUPTED at end):
-	config_file = os.path.join(rundir, config_file(args.patterns))
-	head = ""
-	mode = "w"
-	if args.carryon and os.path.isfile(config_file): 
-		mode = "a"
-		print "... CONTINUING INTERRUPTED RUN " + str(args.seed) + "."
-		head += "\n\n# ... CONTINUE THE RUN ..."
-	elif os.path.isfile(config_file):
-		raise Exception("The run already exists in\n\t"+rundir+\
-					    "\nIf you'd like to continue it, use the -f flag.")
-	elif args.carryon:
-		print "You say I should CONTINUE AN INTERRUPTED RUN, but there is no evidence of any" +\
-			  "previous results from seed " + str(args.seed) + "!"
-		print "\t => starting from scratch."
-
-	with open(config_file,mode) as f:
+	# Run the test for seed
+	rundir = os.path.join(outdir, str(abs(s)))
+	exitcode = run(args, args.patterns, rundir, str(s), args.carryon, args.verbose)
 	
-		# Write run metadata into the opened configuration file
-		f.write(head+"# Run " + ts + " has configuration:\n")
-		for arg, value in sorted(vars(args).items()):
-			f.write(str(arg) + '=' + str(value) + '\n')
-	
-		# Now run:
-		exitcode=0
-		try:
-			[ts, fn] = test_dithers(dx=args.xmax,
-									pattern=args.patterns, 
-									NX = args.nx, 
-									NY = args.ny, 
-									nsur = args.nsurveys, 
-									totcals=args.nsizes, 
-									mode=args.mode, 
-									seed=str(args.seed), 
-									dy=args.ymax, 
-									verb=args.verbose, 
-									rundir=rundir, 
-									calipath=os.path.abspath(args.calipath), 
-									starfile=os.path.abspath(args.starpath), 
-									cont=args.carryon, 
-									detbool=args.detbool, 
-									ftol=args.ftol)
-		except:
-			tb = traceback.format_exc()
-			f.write("\n#...INTERRUPTED due to:\n" + tb)
-			print "RUN WAS INTERRUPTED... Config and traceback saved to " + \
-				  os.path.join(rundir, config_file) + ".\n\t" + tb.splitlines()[-1]
-			exitcode=1
-
-	print "Run " + ts + " is finished, configuration saved to " + config_file + ", log in " \
-	      + os.path.basename(fn) + "."
+	# Exit
 	exit(exitcode)
-
