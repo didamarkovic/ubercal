@@ -293,7 +293,7 @@ def run(args, patterns, rundir, seed='-'+TS, carryon=False, verbose=False):
 	if carryon and os.path.isfile(config_file): 
 		mode = "a"
 		print "... CONTINUING INTERRUPTED RUN " + str(seed) + "."
-		head += "\n\n# ... CONTINUE THE RUN ..."
+		head += "\n\n# ... CONTINUE THE RUN ...\n"
 	elif os.path.isfile(config_file):
 		raise Exception("The run already exists in\n\t"+rundir+\
 					    "\nIf you'd like to continue it, use the -f flag.")
@@ -400,9 +400,17 @@ if __name__=='__main__':
 		outdir = os.path.abspath(os.path.join(args.outpath, 'outputs/'))
 	else:
 		outdir = os.path.abspath(args.outpath)
+
+	# Add a DET or EXP folder depending on what is requested
+	if args.detbool:
+		outdir = os.path.join(outdir, 'DET/')
+	else:
+		outdir = os.path.join(outdir, 'EXP/')
+
+	# Make everything if it doesn't already exist
 	if not os.path.isdir(outdir):
 		os.makedirs(outdir)
-		if args.verbose: print "Created " + os.path.dirname(rundir),
+		if args.verbose: print "Created " + outdir, 
 
 	# Run the test once for each seed
 	for s in seeds:
