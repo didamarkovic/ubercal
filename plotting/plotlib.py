@@ -184,6 +184,7 @@ def calibrations_stats(path, silence=False):
 
 	sigma_i = np.ones(len(paths))*np.inf
 	sigma_f = np.ones(len(paths))*np.inf
+	nexp = np.zeros(len(paths)).astype(int)
 	dithersizes = np.zeros(len(paths))
 	for i,file in enumerate(paths):
 
@@ -207,8 +208,8 @@ def calibrations_stats(path, silence=False):
 		if 'exp' not in headline:
 			# Extract the sigma_i, sigma_f from the given calibrations.txt file.
 			# Loop over fovs
-			nexp = int(len(data)/N)
-			newdata = np.zeros([nexp,2])
+			nexp[i] = int(len(data)/N)
+			newdata = np.zeros([nexp[i],2])
 
 			# This loop is very slow
 			for alpha in range(nexp):
@@ -218,13 +219,14 @@ def calibrations_stats(path, silence=False):
 			sigma_i[i] = np.std(newdata[:,0]) 
 			sigma_f[i] = np.std(newdata[:,1])
 		else:
+			nexp[i] = int(len(data))
 			sigma_i[i] = np.std(data[:,1]) 
 			sigma_f[i] = np.std(data[:,5])
 
 	# Sort in increasing dithersize
 	index = np.argsort(dithersizes)
 
-	return dithersizes[index], sigma_i[index], sigma_f[index]
+	return dithersizes[index], sigma_i[index], sigma_f[index], nexp[index]
 
 def plot_vs_x(rundir, patterns=["J", "O", "S", "R"], plotssize = [None], linestyles = ['-', '--'], vsd=False):
 
