@@ -20,8 +20,14 @@ Euclid relative calibration from uber-cal simulation
 
 ## INSTALLATION
 
-The test-calibration/README.bsh script compiles and runs all the code.
-Before you do that however, you should install Mangle (GitHub version!) by following the instructions. Place the 'mangle' folder into the main folder of the repo so the rest of the code can find it and so that git can ignore it nicely.
+The ubercal/README.bsh script compiles and runs all the code. Sometimes this might not work, so try copy-pasting the commands form the README.bsh script into the command line and running them manually.
+Before you do that however, you should install Mangle (GitHub version: https://github.com/mollyswanson/mangle) by following the instructions. Place the 'mangle' folder into the main folder of the repo so the rest of the code can find it and so that git can ignore it nicely. Note that Mangle uses Fortran, so... good luck to you!
+
+On my Mac, I use Conda environments to get everything in one place (https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html).
+
+Then configure the Mangle Makefile and uncomment "STATICFLAGS:= -static-libgfortran" (l.15, I think), and comment the following line.
+
+Then compile Mangle with 'make static'.
 
 ## FURTHER INFO
 

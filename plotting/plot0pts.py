@@ -100,8 +100,8 @@ if __name__=="__main__":
 	for i in range(len(cals)-1):
 		plt.axvline(x=i+0.5, color='0.8', linestyle='-', linewidth=1)
 
-	plt.bar(cals[:,0]-0.5, cals[:,INIT], fill=True, width=1, label='initial 0-points', color='0.5', ls='--', lw=0)
-	plt.bar(cals[:,0]-0.5, cals[:,FLUX], fill=True, width=1, label='calibrator fluxes', color='g', alpha=0.5, ls='-', lw=0, bottom=cals[:,1])
+	plt.bar(cals[:,0]-0.5, cals[:,INIT], fill=True, width=1, label='initial 0-points', color='0.5', lw=0)
+	plt.bar(cals[:,0]-0.5, cals[:,FLUX], fill=True, width=1, label='calibrator fluxes', color='g', alpha=0.5, lw=0, bottom=cals[:,1])
 	plt.axhline(y=np.mean(cals[:,INIT]), ls='--', label='initial mean')
 	plt.axhline(y=np.mean(cals[:,INIT])+np.mean(cals[:,2]), ls='-', color='y', label='initial tot mean', lw=1)
 	plt.axhline(y=np.mean(cals[:,FINAL]), ls=':', label='final mean')
