@@ -1,5 +1,5 @@
 # Ubercal
-Euclid relative calibration from uber-cal simulation
+Euclid relative calibration from uber-cal simulation (reference paper: https://arxiv.org/abs/1606.07061)
 
 ## LICENCE
 
